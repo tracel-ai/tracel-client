@@ -1,6 +1,45 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize)]
+pub struct ProgressNodeRequest {
+    pub id: u64,
+    pub parent: Option<u64>,
+    pub name: String,
+    pub unit: Option<String>,
+    pub total: Option<u64>,
+    #[serde(default)]
+    pub attributes: serde_json::Map<String, serde_json::Value>,
+}
+
+#[derive(Debug, Serialize)]
+pub enum ProgressStatusRequest {
+    Success,
+    Abandoned,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(tag = "type")]
+pub enum ProgressEventRequest {
+    Started {
+        node: ProgressNodeRequest,
+    },
+    Updated {
+        id: u64,
+        current: u64,
+        total: Option<u64>,
+    },
+    Message {
+        id: u64,
+        message: String,
+    },
+    Finished {
+        id: u64,
+        status: ProgressStatusRequest,
+        message: Option<String>,
+    },
+}
+
+#[derive(Debug, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum InputUsed {
     Artifact { artifact_id: String },
@@ -47,6 +86,7 @@ pub enum ExperimentMessage {
         name: String,
     },
     InputUsed(InputUsed),
+    Progress(ProgressEventRequest),
     Error(String),
     ExperimentComplete(ExperimentCompletion),
 }
