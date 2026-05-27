@@ -1,32 +1,36 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize)]
-pub struct ProgressNodeRequest {
+pub struct ActivityMeterRequest {
+    pub unit: Option<String>,
+    pub total: Option<u64>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ActivityRequest {
     pub id: u64,
     pub parent: Option<u64>,
     pub name: String,
-    pub unit: Option<String>,
-    pub total: Option<u64>,
+    pub meter: Option<ActivityMeterRequest>,
     #[serde(default)]
     pub attributes: serde_json::Map<String, serde_json::Value>,
 }
 
 #[derive(Debug, Serialize)]
-pub enum ProgressStatusRequest {
+pub enum ActivityStatusRequest {
     Success,
     Abandoned,
 }
 
 #[derive(Debug, Serialize)]
 #[serde(tag = "type")]
-pub enum ProgressEventRequest {
+pub enum ActivityEventRequest {
     Started {
-        node: ProgressNodeRequest,
+        activity: ActivityRequest,
     },
     Updated {
         id: u64,
         current: u64,
-        total: Option<u64>,
     },
     Message {
         id: u64,
@@ -34,7 +38,7 @@ pub enum ProgressEventRequest {
     },
     Finished {
         id: u64,
-        status: ProgressStatusRequest,
+        status: ActivityStatusRequest,
         message: Option<String>,
     },
 }
@@ -86,7 +90,7 @@ pub enum ExperimentMessage {
         name: String,
     },
     InputUsed(InputUsed),
-    Progress(ProgressEventRequest),
+    Activity(ActivityEventRequest),
     Error(String),
     ExperimentComplete(ExperimentCompletion),
 }
