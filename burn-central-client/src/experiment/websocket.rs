@@ -21,7 +21,6 @@ pub struct ActivityRequest {
 pub enum ActivityStatusRequest {
     Success,
     Abandoned,
-    Cancelled,
 }
 
 #[derive(Debug, Serialize)]
