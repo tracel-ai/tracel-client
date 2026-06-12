@@ -1,17 +1,17 @@
 [package]
-name = "burn-central-client"
+name = "tracel-client"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
-description = "Collection of HTTP calls required to communicate with the backend of burn-central"
+description = "Collection of HTTP calls required to communicate with the Tracel backend"
 homepage.workspace = true
 repository.workspace = true
 license.workspace = true
 readme.workspace = true
 
 [features]
-default = ["central", "station"]
-central = []
+default = ["tracel", "station"]
+tracel = []
 station = []
 
 [dependencies]

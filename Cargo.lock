@@ -147,21 +147,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5d20789868f4b01b2f2caec9f5c4e0213b41e3e5702a50157d699ae31ced2fcb"
 
 [[package]]
-name = "burn-central-client"
-version = "0.7.0"
-dependencies = [
- "reqwest",
- "serde",
- "serde_json",
- "serde_with",
- "strum",
- "thiserror 2.0.18",
- "tracing",
- "tungstenite",
- "uuid",
-]
-
-[[package]]
 name = "bytes"
 version = "1.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2196,6 +2181,21 @@ name = "tower-service"
 version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8df9b6e13f2d32c91b9bd719c00d1958837bc7dec474d94952798cc8e69eeec3"
+
+[[package]]
+name = "tracel-client"
+version = "0.7.0"
+dependencies = [
+ "reqwest",
+ "serde",
+ "serde_json",
+ "serde_with",
+ "strum",
+ "thiserror 2.0.18",
+ "tracing",
+ "tungstenite",
+ "uuid",
+]
 
 [[package]]
 name = "tracel-xtask"

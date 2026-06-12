@@ -3,12 +3,12 @@
 # https://doc.rust-lang.org/cargo/reference/resolver.html#feature-resolver-version-2
 resolver = "2"
 
-members = ["burn-central-client", "xtask"]
+members = ["tracel-client", "xtask"]
 
 [workspace.package]
 edition = "2024"
 version = "0.7.0"
-authors = ["Burn central team"]
+authors = ["Tracel team"]
 homepage = "https://burn.dev"
 repository = "https://github.com/tracel-ai/burn-central-client"
 license = "MIT OR Apache-2.0"

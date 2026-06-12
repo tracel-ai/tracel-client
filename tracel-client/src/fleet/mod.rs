@@ -1,4 +1,4 @@
-//! Fleet management client for Burn Central.
+//! Fleet management client for Tracel.
 
 pub mod request;
 pub mod response;
@@ -14,7 +14,7 @@ use request::{
 use reqwest::Url;
 use response::{FleetModelDownloadResponse, FleetSyncSnapshotResponse};
 
-/// A client for interacting with the Burn Central Fleet API.
+/// A client for interacting with the Tracel Fleet API.
 #[derive(Debug, Clone)]
 pub struct FleetClient {
     transport: ApiTransport,

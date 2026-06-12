@@ -147,7 +147,7 @@ impl ApiTransport {
         };
 
         tracing::debug!("Sending request to Burn API: {:?}", request);
-        let response = request.send()?.map_to_burn_central_err()?;
+        let response = request.send()?.map_to_tracel_err()?;
         tracing::debug!("Received response from Burn API: {:?}", response);
 
         Ok(response)
@@ -166,12 +166,12 @@ impl ApiTransport {
     }
 }
 
-pub(super) trait ResponseExt {
-    fn map_to_burn_central_err(self) -> Result<reqwest::blocking::Response, ClientError>;
+pub(crate) trait ResponseExt {
+    fn map_to_tracel_err(self) -> Result<reqwest::blocking::Response, ClientError>;
 }
 
 impl ResponseExt for reqwest::blocking::Response {
-    fn map_to_burn_central_err(self) -> Result<reqwest::blocking::Response, ClientError> {
+    fn map_to_tracel_err(self) -> Result<reqwest::blocking::Response, ClientError> {
         if self.status().is_success() {
             Ok(self)
         } else {

@@ -3,22 +3,23 @@ pub mod response;
 use reqwest::header::SET_COOKIE;
 
 use crate::{
-    BurnCentralCredentials, Client, ClientError,
+    Client, ClientError,
+    tracel::TracelCredentials,
     transport::ResponseExt,
     user::response::{GetUserOrganizationsResponse, UserResponseSchema},
 };
 
 impl Client {
-    /// Log in to the Burn Central server with the given credentials.
-    pub fn login(&self, credentials: &BurnCentralCredentials) -> Result<String, ClientError> {
+    /// Log in to the Tracel server with the given credentials.
+    pub fn login(&self, credentials: &TracelCredentials) -> Result<String, ClientError> {
         let form = self
             .transport
             .request(reqwest::Method::POST, "login/api-key")
-            .form::<BurnCentralCredentials>(credentials);
+            .form::<TracelCredentials>(credentials);
 
         tracing::debug!("Requesting login form: {form:?}");
 
-        let res = form.send()?.map_to_burn_central_err()?;
+        let res = form.send()?.map_to_tracel_err()?;
 
         let cookie_header = res.headers().get(SET_COOKIE);
         if let Some(cookie) = cookie_header {

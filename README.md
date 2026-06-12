@@ -1,14 +1,14 @@
-# Burn Central Client
+# Tracel Client
 
 ## Description
 
-**Burn Central Client** is a Rust crate providing the interface between external tools and the **Burn Central** server.  
-It contains all the HTTP calls required to communicate with the backend and acts as the single source of truth for Burn Central’s API definitions.
+**Tracel Client** is a Rust crate providing the interface between external tools and the **Tracel** server.  
+It contains all the HTTP calls required to communicate with the backend and acts as the single source of truth for Tracel’s API definitions.
 
-This crate was extracted from the **Burn Central SDK** to improve control over versioning and to make breaking changes explicit and easier to manage across projects.
+This crate was extracted from the **Tracel SDK** to improve control over versioning and to make breaking changes explicit and easier to manage across projects.
 
 > **Internal Note**  
-> This crate is primarily intended for use by other Burn Central crates (e.g., SDKs, CLIs, and internal services).  
+> This crate is primarily intended for use by other Tracel crates (e.g., SDKs, CLIs, and internal services).  
 > It is publicly visible for transparency and automation purposes but is **not meant for external integration**.
 
 > **Important**  
@@ -22,7 +22,7 @@ This crate was extracted from the **Burn Central SDK** to improve control over v
 This crate follows **Semantic Versioning (SemVer)**:  
 `MAJOR.MINOR.PATCH`
 
-Although we aim to minimize breaking changes, the versioning of this crate is tightly coupled with **Burn Central’s backend API**.  
+Although we aim to minimize breaking changes, the versioning of this crate is tightly coupled with **Tracel’s backend API**.  
 Releases are driven by the server’s route definitions, not by internal library decisions.
 
 > **Note**  
@@ -77,7 +77,7 @@ Crate updates must adhere to the following internal standards:
 
 ## Contribution Process
 
-This crate is maintained by the **Burn Central team** and should only be modified by internal contributors.  
+This crate is maintained by the **Tracel team** and should only be modified by internal contributors.  
 External contributions to this crate **will not be accepted**.
 
 If you wish to contribute to the **CLI** or **SDK**, you are more than welcome to do so.  

@@ -16,7 +16,7 @@ use crate::{
 };
 
 impl Client {
-    /// Creates an artifact entry on the Burn Central server with the given files.
+    /// Creates an artifact entry on the Tracel server with the given files.
     ///
     /// The client must be logged in before calling this method.
     pub fn create_artifact(
@@ -125,7 +125,7 @@ impl Client {
         self.transport.get_json(url)
     }
 
-    /// Request presigned URLs to download an artifact's files from the Burn Central server.
+    /// Request presigned URLs to download an artifact's files from the Tracel server.
     ///
     /// The client must be logged in before calling this method.
     pub fn presign_artifact_download(

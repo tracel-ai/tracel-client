@@ -16,14 +16,14 @@ pub struct RegisteredFunctionRequest {
 }
 
 #[derive(Debug, Serialize, Clone)]
-pub struct BurnCentralCodeMetadataRequest {
+pub struct TracelCodeMetadataRequest {
     pub functions: Vec<RegisteredFunctionRequest>,
 }
 
 #[derive(Debug, Serialize, Clone)]
 pub(crate) struct CodeUploadRequest {
     pub target_package_name: String,
-    pub burn_central_metadata: BurnCentralCodeMetadataRequest,
+    pub tracel_metadata: TracelCodeMetadataRequest,
     pub crates: Vec<CrateVersionMetadataRequest>,
     pub digest: String,
 }

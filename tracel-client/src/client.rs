@@ -1,7 +1,7 @@
 use reqwest::Url;
 use serde::{Deserialize, Serialize};
 
-use crate::credentials::BurnCentralCredentials;
+use crate::credentials::TracelCredentials;
 use crate::error::{ApiErrorBody, ApiErrorCode, ClientError};
 use crate::transport::{ApiTransport, Auth};
 
@@ -20,9 +20,9 @@ impl From<reqwest::Error> for ClientError {
     }
 }
 
-/// A client for making HTTP requests to the Burn Central API.
+/// A client for making HTTP requests to the Tracel API.
 ///
-/// The client can be used to interact with the Burn Central server, such as creating and starting experiments, saving and loading checkpoints, and uploading logs.
+/// The client can be used to interact with the Tracel server, such as creating and starting experiments, saving and loading checkpoints, and uploading logs.
 #[derive(Debug, Clone)]
 pub struct Client {
     pub(crate) transport: ApiTransport,
@@ -50,7 +50,7 @@ impl Env {
 
 impl Client {
     /// Create a new HttpClient with the given base URL and API key.
-    pub fn new(env: Env, credentials: &BurnCentralCredentials) -> Result<Self, ClientError> {
+    pub fn new(env: Env, credentials: &TracelCredentials) -> Result<Self, ClientError> {
         let mut client = Client {
             transport: ApiTransport::new(env.get_url()),
             env: env.clone(),
@@ -63,7 +63,7 @@ impl Client {
 
     #[deprecated]
     /// Please use environment based constructor
-    pub fn from_url(url: Url, credentials: &BurnCentralCredentials) -> Result<Self, ClientError> {
+    pub fn from_url(url: Url, credentials: &TracelCredentials) -> Result<Self, ClientError> {
         let mut client = Client {
             transport: ApiTransport::new(url),
             env: Env::Production,

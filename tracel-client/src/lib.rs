@@ -9,7 +9,7 @@ mod project;
 mod transport;
 mod user;
 
-#[cfg(feature = "central")]
+#[cfg(feature = "station")]
 pub mod fleet;
 #[cfg(feature = "station")]
 pub mod station;
@@ -18,10 +18,10 @@ pub mod websocket;
 #[cfg(feature = "station")]
 pub use station::StationClient;
 
-#[cfg(feature = "central")]
-mod central {
+#[cfg(feature = "station")]
+mod tracel {
     use super::*;
-    pub use credentials::BurnCentralCredentials;
+    pub use credentials::TracelCredentials;
     pub use fleet::FleetClient;
 
     pub mod response {
@@ -40,10 +40,10 @@ mod central {
     }
 }
 
-#[cfg(feature = "central")]
-pub use central::*;
+#[cfg(feature = "tracel")]
+pub use tracel::*;
 
-#[cfg(feature = "central")]
+#[cfg(feature = "tracel")]
 pub use client::Client;
 
 pub use client::Env;

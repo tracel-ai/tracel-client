@@ -5,8 +5,8 @@ use crate::{
     Client, ClientError,
     project::{
         request::{
-            BurnCentralCodeMetadataRequest, CodeUploadRequest, CrateVersionMetadataRequest,
-            CreateProjectRequest,
+            CodeUploadRequest, CrateVersionMetadataRequest, CreateProjectRequest,
+            TracelCodeMetadataRequest,
         },
         response::{CodeUploadUrlsResponse, ProjectResponse},
     },
@@ -62,7 +62,7 @@ impl Client {
         owner_name: &str,
         project_name: &str,
         target_package_name: &str,
-        code_metadata: BurnCentralCodeMetadataRequest,
+        code_metadata: TracelCodeMetadataRequest,
         crates_metadata: Vec<CrateVersionMetadataRequest>,
         digest: &str,
     ) -> Result<CodeUploadUrlsResponse, ClientError> {
@@ -70,7 +70,7 @@ impl Client {
             format!("projects/{owner_name}/{project_name}/code/upload"),
             Some(CodeUploadRequest {
                 target_package_name: target_package_name.to_string(),
-                burn_central_metadata: code_metadata,
+                tracel_metadata: code_metadata,
                 crates: crates_metadata,
                 digest: digest.to_string(),
             }),
