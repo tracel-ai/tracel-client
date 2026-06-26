@@ -153,6 +153,20 @@ impl ApiTransport {
         Ok(response)
     }
 
+    /// Upload raw bytes to an absolute (presigned) URL via PUT.
+    ///
+    /// Unlike the other helpers this does NOT join the path with `base_url` and
+    /// does NOT attach auth — presigned URLs (e.g. S3) are absolute and
+    /// self-authenticating.
+    pub fn upload_bytes_to_url(&self, url: &str, bytes: Vec<u8>) -> Result<(), ClientError> {
+        self.http_client
+            .put(url)
+            .body(bytes)
+            .send()?
+            .map_to_tracel_err()?;
+        Ok(())
+    }
+
     pub fn join(&self, path: &str) -> Url {
         self.join_versioned(path, 1)
     }

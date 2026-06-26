@@ -4,10 +4,7 @@ pub mod response;
 use crate::{
     Client, ClientError,
     project::{
-        request::{
-            CodeUploadRequest, CrateVersionMetadataRequest, CreateProjectRequest,
-            TracelCodeMetadataRequest,
-        },
+        request::{CreateProjectRequest, PublishProjectVersionRequest},
         response::{CodeUploadUrlsResponse, ProjectResponse},
     },
 };
@@ -57,23 +54,19 @@ impl Client {
         )
     }
 
+    /// Request presigned upload URLs for a new code version. The returned
+    /// `urls` map is keyed by the binary target-triple string (e.g.
+    /// `x86_64-unknown-linux-gnu`) for binaries, or `source.zip` for source.
+    /// `urls` is `None` when a version with the same `digest` already exists.
     pub fn publish_project_version_urls(
         &self,
         owner_name: &str,
         project_name: &str,
-        target_package_name: &str,
-        code_metadata: TracelCodeMetadataRequest,
-        crates_metadata: Vec<CrateVersionMetadataRequest>,
-        digest: &str,
+        request: PublishProjectVersionRequest,
     ) -> Result<CodeUploadUrlsResponse, ClientError> {
         self.transport.post_json(
             format!("projects/{owner_name}/{project_name}/code/upload"),
-            Some(CodeUploadRequest {
-                target_package_name: target_package_name.to_string(),
-                tracel_metadata: code_metadata,
-                crates: crates_metadata,
-                digest: digest.to_string(),
-            }),
+            Some(request),
         )
     }
 
@@ -87,5 +80,10 @@ impl Client {
             format!("projects/{owner_name}/{project_name}/code/{code_version_id}/complete"),
             None::<()>,
         )
+    }
+
+    /// Upload raw bytes to an absolute presigned upload URL (PUT).
+    pub fn upload_bytes_to_url(&self, url: &str, bytes: Vec<u8>) -> Result<(), ClientError> {
+        self.transport.upload_bytes_to_url(url, bytes)
     }
 }

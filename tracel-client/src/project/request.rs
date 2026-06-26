@@ -6,31 +6,54 @@ pub(crate) struct CreateProjectRequest {
     pub description: Option<String>,
 }
 
-#[derive(Debug, Serialize, Clone)]
-pub struct RegisteredFunctionRequest {
-    pub mod_path: String,
-    pub fn_name: String,
-    pub proc_type: String,
-    pub code: String,
-    pub routine: String,
+/// Operating system of a binary target. Serializes to match the server's
+/// `OperatingSystem` enum (lowercase: `windows`, `linux`, `macos`).
+#[derive(Debug, Serialize, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum Os {
+    Windows,
+    Linux,
+    Macos,
 }
 
-#[derive(Debug, Serialize, Clone)]
-pub struct TracelCodeMetadataRequest {
-    pub functions: Vec<RegisteredFunctionRequest>,
+/// CPU architecture of a binary target. Serializes to match the server's
+/// `Architecture` enum (lowercase: `x86_64`, `arm64`).
+#[derive(Debug, Serialize, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum Arch {
+    X86_64,
+    Arm64,
 }
 
+/// A single compiled binary in a `binaries` code version.
 #[derive(Debug, Serialize, Clone)]
-pub(crate) struct CodeUploadRequest {
-    pub target_package_name: String,
-    pub tracel_metadata: TracelCodeMetadataRequest,
-    pub crates: Vec<CrateVersionMetadataRequest>,
-    pub digest: String,
-}
-
-#[derive(Debug, Serialize, Clone)]
-pub struct CrateVersionMetadataRequest {
+pub struct PublishBinaryRequest {
+    pub os: Os,
+    pub architecture: Arch,
     pub checksum: String,
-    pub metadata: serde_json::Value,
     pub size: u64,
+}
+
+/// The single source archive in a `source` code version.
+#[derive(Debug, Serialize, Clone)]
+pub struct PublishSourceRequest {
+    pub checksum: String,
+    pub size: u64,
+}
+
+/// The artifact a code version describes: either a set of compiled binaries
+/// (each tagged with its OS/arch) or a single source archive. Serialized with an
+/// internal `type` tag to match the server's `PublishArtifactRequest`.
+#[derive(Debug, Serialize, Clone)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum PublishArtifactRequest {
+    Binaries { binaries: Vec<PublishBinaryRequest> },
+    Source { source: PublishSourceRequest },
+}
+
+/// Body of `POST /projects/{owner}/{project}/code/upload`.
+#[derive(Debug, Serialize, Clone)]
+pub struct PublishProjectVersionRequest {
+    pub digest: String,
+    pub artifact: PublishArtifactRequest,
 }
