@@ -20,8 +20,12 @@ pub struct ApiTransport {
 #[allow(unused)]
 impl ApiTransport {
     pub fn new(base_url: Url) -> Self {
+        let http_client = reqwest::blocking::Client::builder()
+            .timeout(std::time::Duration::from_secs(120))
+            .build()
+            .expect("failed to build HTTP client");
         Self {
-            http_client: reqwest::blocking::Client::new(),
+            http_client,
             base_url,
             auth: Auth::None,
         }
@@ -159,11 +163,11 @@ impl ApiTransport {
     /// does NOT attach auth — presigned URLs (e.g. S3) are absolute and
     /// self-authenticating.
     pub fn upload_bytes_to_url(&self, url: &str, bytes: Vec<u8>) -> Result<(), ClientError> {
-        self.http_client
-            .put(url)
-            .body(bytes)
-            .send()?
-            .map_to_tracel_err()?;
+        let client = reqwest::blocking::Client::builder()
+            .timeout(None)
+            .tcp_keepalive(std::time::Duration::from_secs(60))
+            .build()?;
+        client.put(url).body(bytes).send()?.map_to_tracel_err()?;
         Ok(())
     }
 
