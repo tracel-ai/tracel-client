@@ -57,3 +57,23 @@ pub struct PublishProjectVersionRequest {
     pub digest: String,
     pub artifact: PublishArtifactRequest,
 }
+
+/// Optional body of `POST .../code/{id}/complete`: the multipart uploads the
+/// client finished, so the server can finalize the exact uploads it wrote to.
+#[derive(Debug, Serialize, Clone)]
+pub struct CompleteCodeUploadRequest {
+    pub artifacts: Vec<CompletedCodeArtifact>,
+}
+
+#[derive(Debug, Serialize, Clone)]
+pub struct CompletedCodeArtifact {
+    pub key: String,
+    pub upload_id: String,
+    pub parts: Vec<CompletedCodePart>,
+}
+
+#[derive(Debug, Serialize, Clone)]
+pub struct CompletedCodePart {
+    pub part_number: i32,
+    pub etag: String,
+}

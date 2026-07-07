@@ -158,13 +158,26 @@ impl ApiTransport {
     /// Unlike the other helpers this does NOT join the path with `base_url` and
     /// does NOT attach auth — presigned URLs (e.g. S3) are absolute and
     /// self-authenticating.
-    pub fn upload_bytes_to_url(&self, url: &str, bytes: Vec<u8>) -> Result<(), ClientError> {
-        self.http_client
+    ///
+    /// Returns the response `ETag` header (S3 sets it to the uploaded part's checksum).
+    /// Returns `None` if the server sent no `ETag`.
+    pub fn upload_bytes_to_url(
+        &self,
+        url: &str,
+        bytes: Vec<u8>,
+    ) -> Result<Option<String>, ClientError> {
+        let response = self
+            .http_client
             .put(url)
             .body(bytes)
             .send()?
             .map_to_tracel_err()?;
-        Ok(())
+        let etag = response
+            .headers()
+            .get(reqwest::header::ETAG)
+            .and_then(|value| value.to_str().ok())
+            .map(|value| value.to_string());
+        Ok(etag)
     }
 
     pub fn join(&self, path: &str) -> Url {

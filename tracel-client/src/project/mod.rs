@@ -4,7 +4,7 @@ pub mod response;
 use crate::{
     Client, ClientError,
     project::{
-        request::{CreateProjectRequest, PublishProjectVersionRequest},
+        request::{CompleteCodeUploadRequest, CreateProjectRequest, PublishProjectVersionRequest},
         response::{CodeUploadUrlsResponse, ProjectResponse},
     },
 };
@@ -75,15 +75,20 @@ impl Client {
         owner_name: &str,
         project_name: &str,
         code_version_id: &str,
+        request: CompleteCodeUploadRequest,
     ) -> Result<(), ClientError> {
         self.transport.post(
             format!("projects/{owner_name}/{project_name}/code/{code_version_id}/complete"),
-            None::<()>,
+            Some(request),
         )
     }
 
     /// Upload raw bytes to an absolute presigned upload URL (PUT).
-    pub fn upload_bytes_to_url(&self, url: &str, bytes: Vec<u8>) -> Result<(), ClientError> {
+    pub fn upload_bytes_to_url(
+        &self,
+        url: &str,
+        bytes: Vec<u8>,
+    ) -> Result<Option<String>, ClientError> {
         self.transport.upload_bytes_to_url(url, bytes)
     }
 }
