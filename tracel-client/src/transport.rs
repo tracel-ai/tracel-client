@@ -21,7 +21,7 @@ pub struct ApiTransport {
 impl ApiTransport {
     pub fn new(base_url: Url) -> Self {
         let http_client = reqwest::blocking::Client::builder()
-            .timeout(std::time::Duration::from_secs(120))
+            .timeout(std::time::Duration::from_secs(60))
             .build()
             .expect("failed to build HTTP client");
         Self {
