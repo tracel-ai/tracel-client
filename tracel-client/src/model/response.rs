@@ -46,3 +46,15 @@ pub struct PresignedModelFileUrlResponse {
     pub rel_path: String,
     pub url: String,
 }
+
+#[derive(Deserialize, Clone, Debug)]
+pub struct PresignedModelFileUploadUrlsResponse {
+    pub rel_path: String,
+    pub urls: crate::artifact::response::MultipartUploadResponse,
+}
+
+#[derive(Deserialize, Clone, Debug)]
+pub struct RequestModelVersionUploadResponse {
+    pub version: u32,
+    pub files: Vec<PresignedModelFileUploadUrlsResponse>,
+}
