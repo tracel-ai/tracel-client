@@ -41,11 +41,9 @@ pub enum MetricData {
     Counter {
         value: u64,
     },
-    Histogram {
-        count: u64,
-        sum: f64,
-        /// Pairs of (upper bucket bound, count in bucket).
-        buckets: Vec<(f64, u64)>,
+    /// A single raw observation; quantiles are computed server-side at query time.
+    Distribution {
+        value: f64,
     },
 }
 
@@ -55,7 +53,7 @@ pub enum MetricData {
 pub enum MetricKind {
     Gauge,
     Counter,
-    Histogram,
+    Distribution,
 }
 
 /// Optional descriptor attached to a metric name (unit, description, kind).
@@ -115,11 +113,7 @@ mod tests {
                     name: "latency_ms".to_string(),
                     timestamp: "2026-04-20T15:10:00Z".to_string(),
                     metadata: serde_json::json!({}),
-                    data: MetricData::Histogram {
-                        count: 3,
-                        sum: 12.5,
-                        buckets: vec![(1.0, 1), (5.0, 2)],
-                    },
+                    data: MetricData::Distribution { value: 12.5 },
                 },
             ],
             metric_descriptors: vec![MetricDescriptorEvent {
@@ -156,10 +150,8 @@ mod tests {
                     "name": "latency_ms",
                     "timestamp": "2026-04-20T15:10:00Z",
                     "metadata": {},
-                    "kind": "histogram",
-                    "count": 3,
-                    "sum": 12.5,
-                    "buckets": [[1.0, 1], [5.0, 2]]
+                    "kind": "distribution",
+                    "value": 12.5
                 }
             ],
             "metric_descriptors": [
