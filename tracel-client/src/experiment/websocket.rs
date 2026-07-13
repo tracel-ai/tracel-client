@@ -76,11 +76,9 @@ pub enum LogEntryLevel {
 }
 
 /// A structured log line sent over the experiment websocket.
-///
-/// The client supplies the timestamp (RFC 3339) and a flat `metadata` object of attributes; the
-/// backend stores them alongside the level and message.
 #[derive(Debug, Serialize)]
 pub struct LogEntry {
+    /// RFC3339 / ISO-8601 timestamp (e.g. `2026-04-20T15:10:00Z`).
     pub timestamp: String,
     pub level: LogEntryLevel,
     pub message: String,
