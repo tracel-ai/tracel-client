@@ -2052,9 +2052,10 @@ checksum = "8df9b6e13f2d32c91b9bd719c00d1958837bc7dec474d94952798cc8e69eeec3"
 
 [[package]]
 name = "tracel-client"
-version = "0.11.0"
+version = "0.11.1"
 dependencies = [
  "reqwest",
+ "rustls",
  "serde",
  "serde_json",
  "serde_with",
@@ -2063,6 +2064,7 @@ dependencies = [
  "tracing",
  "tungstenite",
  "uuid",
+ "webpki-roots 0.26.11",
 ]
 
 [[package]]
@@ -2652,7 +2654,7 @@ checksum = "1ffae5123b2d3fc086436f8834ae3ab053a283cfac8fe0a0b8eaae044768a4c4"
 
 [[package]]
 name = "xtask"
-version = "0.11.0"
+version = "0.11.1"
 dependencies = [
  "log",
  "tracel-xtask",

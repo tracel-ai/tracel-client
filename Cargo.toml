@@ -7,7 +7,7 @@ members = ["tracel-client", "xtask"]
 
 [workspace.package]
 edition = "2024"
-version = "0.11.0"
+version = "0.11.1"
 authors = ["Tracel team"]
 homepage = "https://burn.dev"
 repository = "https://github.com/tracel-ai/burn-central-client"
@@ -23,6 +23,15 @@ thiserror = { version = "2.0.18" }
 strum = { version = "0.27.2", features = ["derive"] }
 tungstenite = { version = "0.28.0", features = ["rustls-tls-webpki-roots"] }
 tracing = { version = "0.1" }
+# The websocket names its own crypto provider instead of letting rustls infer one; see
+# `websocket::tls_config`. aws-lc-rs is what reqwest uses here too.
+rustls = { version = "0.23", default-features = false, features = [
+    "aws-lc-rs",
+    "std",
+] }
+# Pinned to the version tungstenite's `rustls-tls-webpki-roots` feature resolves to, so the root
+# store is not duplicated.
+webpki-roots = { version = "0.26" }
 
 [profile.dev]
 debug = 0

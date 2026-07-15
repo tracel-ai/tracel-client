@@ -1,12 +1,19 @@
-use std::{thread, time::Duration};
+use std::{net::TcpStream, sync::Arc, thread, time::Duration};
 
 use reqwest::header::COOKIE;
+use rustls::{ClientConfig, RootCertStore};
 use serde::{Serialize, de::DeserializeOwned};
 
 use thiserror::Error;
 
 use tungstenite::{
-    Message, Utf8Bytes, WebSocket, client::IntoClientRequest, connect, stream::MaybeTlsStream,
+    Connector, HandshakeError, Message, Utf8Bytes, WebSocket,
+    client::{IntoClientRequest, uri_mode},
+    client_tls_with_config,
+    error::UrlError,
+    handshake::client::{Request, Response},
+    http::{Uri, request::Parts},
+    stream::{MaybeTlsStream, Mode},
 };
 
 pub use crate::experiment::websocket::*;
@@ -30,6 +37,9 @@ pub enum WebSocketError {
 }
 
 const DEFAULT_RECONNECT_DELAY: Duration = Duration::from_millis(1000);
+
+/// Matches the limit `tungstenite::connect` applies.
+const MAX_REDIRECTS: u8 = 3;
 
 type Socket = WebSocket<MaybeTlsStream<std::net::TcpStream>>;
 struct ConnectedSocket {
@@ -69,8 +79,7 @@ impl WebSocketClient {
             }
         }
 
-        let (mut socket, _) =
-            connect(req).map_err(|e| WebSocketError::ConnectionError(e.to_string()))?;
+        let (mut socket, _) = Self::handshake(req)?;
 
         match socket.get_mut() {
             MaybeTlsStream::Plain(stream) => stream.set_nonblocking(true),
@@ -88,6 +97,83 @@ impl WebSocketClient {
             auth: auth.clone(),
         });
         Ok(())
+    }
+
+    /// Connects and performs the websocket handshake, following redirects like
+    /// `tungstenite::connect` does.
+    ///
+    /// This exists instead of `tungstenite::connect` only because that function hands `None` to
+    /// `client_tls_with_config`, leaving the choice of crypto provider to rustls. See
+    /// [`tls_config`] for why that choice has to be made here.
+    fn handshake(request: Request) -> Result<(Socket, Response), WebSocketError> {
+        let config = tls_config()?;
+        let (parts, _) = request.into_parts();
+        let mut uri = parts.uri.clone();
+
+        for attempt in 0..=MAX_REDIRECTS {
+            let request = request_with_uri(&parts, &uri);
+
+            match Self::try_handshake(request, Connector::Rustls(config.clone())) {
+                Err(tungstenite::Error::Http(response))
+                    if response.status().is_redirection() && attempt < MAX_REDIRECTS =>
+                {
+                    let location = response.headers().get("Location").ok_or_else(|| {
+                        WebSocketError::ConnectionError(
+                            "redirected without a `Location` header".to_string(),
+                        )
+                    })?;
+
+                    uri = location
+                        .to_str()
+                        .map_err(|e| {
+                            WebSocketError::ConnectionError(format!("invalid `Location`: {e}"))
+                        })?
+                        .parse::<Uri>()
+                        .map_err(|e| {
+                            WebSocketError::ConnectionError(format!("invalid `Location`: {e}"))
+                        })?;
+
+                    tracing::debug!("WebSocket redirected to {uri}");
+                }
+                other => {
+                    return other.map_err(|e| WebSocketError::ConnectionError(e.to_string()));
+                }
+            }
+        }
+
+        Err(WebSocketError::ConnectionError(format!(
+            "exceeded {MAX_REDIRECTS} redirects"
+        )))
+    }
+
+    fn try_handshake(
+        request: Request,
+        connector: Connector,
+    ) -> Result<(Socket, Response), tungstenite::Error> {
+        let uri = request.uri();
+        let mode = uri_mode(uri)?;
+
+        let host = uri.host().ok_or(UrlError::NoHostName)?;
+        // An IPv6 host arrives bracketed, which `to_socket_addrs` will not parse.
+        let host = host
+            .strip_prefix('[')
+            .and_then(|host| host.strip_suffix(']'))
+            .unwrap_or(host);
+        let port = uri.port_u16().unwrap_or(match mode {
+            Mode::Plain => 80,
+            Mode::Tls => 443,
+        });
+
+        let stream = TcpStream::connect((host, port))?;
+        stream.set_nodelay(true)?;
+
+        // A `ws://` request ignores the connector, so passing one is safe for both modes.
+        client_tls_with_config(request, stream, None, Some(connector)).map_err(|e| match e {
+            HandshakeError::Failure(e) => e,
+            HandshakeError::Interrupted(_) => {
+                unreachable!("a blocking handshake cannot be interrupted")
+            }
+        })
     }
 
     fn reconnect(&mut self) -> Result<(), WebSocketError> {
@@ -200,6 +286,49 @@ impl WebSocketClient {
             Err(WebSocketError::NotConnected)
         }
     }
+}
+
+/// Builds the TLS configuration for `wss://` connections, naming the crypto provider explicitly.
+///
+/// rustls only infers a provider when exactly one of `ring` and `aws-lc-rs` is linked. That holds
+/// for this crate on its own — reqwest brings in aws-lc-rs and nothing else — but not for every
+/// dependent: burn reaches this crate alongside an older reqwest that brings in ring, and the two
+/// unify onto one rustls with both providers enabled. Inference then panics rather than picking,
+/// taking the handshake down with it.
+///
+/// Naming aws-lc-rs keeps the handshake working whatever else a dependent links, and agrees with
+/// the provider reqwest already selects here, so a process ends up using just the one.
+///
+/// The root store mirrors tungstenite's own `rustls-tls-webpki-roots` behaviour, which is what
+/// this replaces.
+fn tls_config() -> Result<Arc<ClientConfig>, WebSocketError> {
+    let mut roots = RootCertStore::empty();
+    roots.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
+
+    let provider = Arc::new(rustls::crypto::aws_lc_rs::default_provider());
+    let config = ClientConfig::builder_with_provider(provider)
+        .with_safe_default_protocol_versions()
+        .map_err(|e| WebSocketError::ConnectionError(format!("failed to configure TLS: {e}")))?
+        .with_root_certificates(roots)
+        .with_no_client_auth();
+
+    Ok(Arc::new(config))
+}
+
+/// Rebuilds a request against `uri`, carrying the original headers over to a redirect target.
+fn request_with_uri(parts: &Parts, uri: &Uri) -> Request {
+    let mut builder = Request::builder()
+        .uri(uri.clone())
+        .method(parts.method.clone())
+        .version(parts.version);
+
+    if let Some(headers) = builder.headers_mut() {
+        *headers = parts.headers.clone();
+    }
+
+    builder
+        .body(())
+        .expect("a request rebuilt from valid parts should be valid")
 }
 
 impl Drop for WebSocketClient {
