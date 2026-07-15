@@ -24,3 +24,4 @@ thiserror.workspace = true
 strum.workspace = true
 tungstenite.workspace = true
 tracing.workspace = true
+rustls.workspace = true

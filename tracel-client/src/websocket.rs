@@ -1,4 +1,8 @@
-use std::{thread, time::Duration};
+use std::{
+    sync::Once,
+    thread,
+    time::Duration,
+};
 
 use reqwest::header::COOKIE;
 use serde::{Serialize, de::DeserializeOwned};
@@ -31,6 +35,22 @@ pub enum WebSocketError {
 
 const DEFAULT_RECONNECT_DELAY: Duration = Duration::from_millis(1000);
 
+static INSTALL_CRYPTO_PROVIDER: Once = Once::new();
+
+/// Ensures a process-level rustls [`CryptoProvider`] is installed.
+///
+/// Multiple rustls crypto backends (`ring` and `aws-lc-rs`) can end up compiled
+/// in through feature unification with other crates in the dependency graph.
+/// When more than one is present, rustls cannot pick a default automatically and
+/// tungstenite's `ClientConfig::builder()` panics. Installing the `ring` provider
+/// explicitly removes that ambiguity. The `Once` makes this idempotent, and any
+/// error means another provider is already installed, which is fine.
+fn ensure_crypto_provider() {
+    INSTALL_CRYPTO_PROVIDER.call_once(|| {
+        let _ = rustls::crypto::ring::default_provider().install_default();
+    });
+}
+
 type Socket = WebSocket<MaybeTlsStream<std::net::TcpStream>>;
 struct ConnectedSocket {
     socket: Socket,
@@ -54,6 +74,8 @@ impl WebSocketClient {
     }
 
     pub(crate) fn connect(&mut self, url: &str, auth: &Auth) -> Result<(), WebSocketError> {
+        ensure_crypto_provider();
+
         let mut req = url
             .into_client_request()
             .expect("Should be able to create a client request from the URL");
