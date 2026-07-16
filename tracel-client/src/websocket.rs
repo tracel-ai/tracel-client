@@ -1,8 +1,4 @@
-use std::{
-    sync::Once,
-    thread,
-    time::Duration,
-};
+use std::{sync::Once, thread, time::Duration};
 
 use reqwest::header::COOKIE;
 use serde::{Serialize, de::DeserializeOwned};
