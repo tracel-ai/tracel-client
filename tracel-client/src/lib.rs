@@ -3,6 +3,7 @@ mod client;
 mod credentials;
 mod error;
 mod experiment;
+pub mod inference;
 mod job;
 mod model;
 mod project;

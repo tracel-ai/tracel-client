@@ -64,6 +64,27 @@ pub struct MetricLog {
     pub value: f64,
 }
 
+/// Severity of a [`LogEntry`], serialized as its lowercase name.
+#[derive(Debug, Clone, Copy, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum LogEntryLevel {
+    Trace,
+    Debug,
+    Info,
+    Warn,
+    Error,
+}
+
+/// A structured log line sent over the experiment websocket.
+#[derive(Debug, Serialize)]
+pub struct LogEntry {
+    /// RFC3339 / ISO-8601 timestamp (e.g. `2026-04-20T15:10:00Z`).
+    pub timestamp: String,
+    pub level: LogEntryLevel,
+    pub message: String,
+    pub metadata: serde_json::Map<String, serde_json::Value>,
+}
+
 #[derive(Debug, Serialize)]
 #[serde(tag = "type", content = "data", rename_all = "snake_case")]
 pub enum ExperimentMessage {
@@ -84,7 +105,7 @@ pub enum ExperimentMessage {
         split: String,
         best_metric_values: Vec<MetricLog>,
     },
-    Log(String),
+    LogEntries(Vec<LogEntry>),
     Arguments(serde_json::Value),
     Config {
         value: serde_json::Value,
