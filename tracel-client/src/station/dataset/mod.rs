@@ -73,8 +73,8 @@ impl<'a> DatasetClient<'a> {
             .join(&format!("datasets/{dataset_name}/versions/{version}/items"));
         {
             let mut pairs = url.query_pairs_mut();
-            if let Some(cursor) = request.cursor {
-                pairs.append_pair("cursor", &cursor.to_string());
+            if let Some(index) = request.index {
+                pairs.append_pair("index", &index.to_string());
             }
             if let Some(limit) = request.limit {
                 pairs.append_pair("limit", &limit.to_string());

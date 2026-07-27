@@ -28,6 +28,7 @@ pub struct DatasetVersionResponse {
     pub metadata: Option<serde_json::Value>,
     pub source_kind: SourceKindResponse,
     pub created_at: String,
+    pub item_count: u64,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -60,5 +61,4 @@ pub struct DatasetVersionItemResponse {
 #[derive(Debug, Clone, Deserialize)]
 pub struct DatasetVersionItemsPageResponse {
     pub items: Vec<DatasetVersionItemResponse>,
-    pub next_cursor: Option<u64>,
 }
