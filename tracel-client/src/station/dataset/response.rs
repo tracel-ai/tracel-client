@@ -61,5 +61,4 @@ pub struct DatasetVersionItemResponse {
 #[derive(Debug, Clone, Deserialize)]
 pub struct DatasetVersionItemsPageResponse {
     pub items: Vec<DatasetVersionItemResponse>,
-    pub next_cursor: Option<u64>,
 }

@@ -50,6 +50,6 @@ pub struct QueryDatasetVersionsRequest {
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct StreamDatasetVersionItemsRequest {
-    pub cursor: Option<u64>,
+    pub index: Option<u64>,
     pub limit: Option<u32>,
 }
