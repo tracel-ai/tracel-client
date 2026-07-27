@@ -52,6 +52,23 @@ impl<'a> DatasetClient<'a> {
         self.transport.get_json(url)
     }
 
+    pub fn get_version(
+        &self,
+        dataset_name: &str,
+        version: u32,
+    ) -> Result<DatasetVersionResponse, ClientError> {
+        self.transport
+            .get_json(format!("datasets/{dataset_name}/versions/{version}"))
+    }
+
+    pub fn get_latest_version(
+        &self,
+        dataset_name: &str,
+    ) -> Result<DatasetVersionResponse, ClientError> {
+        self.transport
+            .get_json(format!("datasets/{dataset_name}/versions/latest"))
+    }
+
     pub fn download(
         &self,
         dataset_name: &str,
