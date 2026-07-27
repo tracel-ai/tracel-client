@@ -49,6 +49,6 @@ pub use tracel::*;
 pub use client::Client;
 
 pub use client::Env;
-pub use error::ClientError;
+pub use error::{ApiErrorCode, ClientError};
 
 pub use websocket::WebSocketClient;
