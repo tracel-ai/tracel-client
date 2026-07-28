@@ -10,6 +10,8 @@ pub enum ApiErrorCode {
     ProjectAlreadyExists,
     UnsupportedSdkVersion,
     LimitReached,
+    Dataset,
+    DatasetVersion,
     // ...
     #[serde(other)]
     Unknown,
@@ -42,6 +44,8 @@ pub enum ClientError {
     BadSessionId,
     #[error("Resource not found")]
     NotFound,
+    #[error("Resource not found: {0}")]
+    NotFoundWithCode(ApiErrorCode),
     #[error("Unauthorized access")]
     Unauthorized,
     #[error("Internal server error")]
@@ -59,12 +63,16 @@ pub enum ClientError {
 
 impl ClientError {
     pub fn is_not_found(&self) -> bool {
-        matches!(self, ClientError::NotFound)
+        matches!(
+            self,
+            ClientError::NotFound | ClientError::NotFoundWithCode(_)
+        )
     }
 
     pub fn code(&self) -> Option<ApiErrorCode> {
         match self {
             ClientError::ApiError { body, .. } => Some(body.code.clone()),
+            ClientError::NotFoundWithCode(code) => Some(code.clone()),
             _ => None,
         }
     }

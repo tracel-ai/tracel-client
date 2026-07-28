@@ -194,7 +194,19 @@ impl ResponseExt for reqwest::blocking::Response {
             Ok(self)
         } else {
             match self.status() {
-                reqwest::StatusCode::NOT_FOUND => Err(ClientError::NotFound),
+                reqwest::StatusCode::NOT_FOUND => {
+                    let code = self
+                        .text()
+                        .ok()
+                        .and_then(|text| text.parse::<serde_json::Value>().ok())
+                        .and_then(|value| serde_json::from_value::<ApiErrorBody>(value).ok())
+                        .map(|body| body.code);
+
+                    match code {
+                        Some(code) => Err(ClientError::NotFoundWithCode(code)),
+                        None => Err(ClientError::NotFound),
+                    }
+                }
                 reqwest::StatusCode::UNAUTHORIZED => Err(ClientError::Unauthorized),
                 reqwest::StatusCode::INTERNAL_SERVER_ERROR => Err(ClientError::InternalServerError),
                 _ => Err(ClientError::ApiError {
