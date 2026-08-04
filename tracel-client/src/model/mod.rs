@@ -55,6 +55,9 @@ impl Client {
         ))
     }
 
+    /// Generate presigned URLs for downloading model version files.
+    ///
+    /// The client must be logged in before calling this method.
     pub fn presign_model_download(
         &self,
         namespace: &str,
@@ -72,6 +75,10 @@ impl Client {
         )
     }
 
+    /// Generate presigned URLs for downloading model version files while
+    /// specifiying for which project the request is for.
+    ///
+    /// The client must be logged in before calling this method.
     pub fn presign_model_import_download(
         &self,
         namespace: &str,
