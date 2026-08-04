@@ -76,7 +76,7 @@ impl Client {
     }
 
     /// Generate presigned URLs for downloading model version files while
-    /// specifiying for which project the request is for.
+    /// specifying for which project the request is for.
     ///
     /// The client must be logged in before calling this method.
     pub fn presign_model_import_download(
