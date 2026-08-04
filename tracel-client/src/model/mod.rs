@@ -55,9 +55,6 @@ impl Client {
         ))
     }
 
-    /// Generate presigned URLs for downloading model version files.
-    ///
-    /// The client must be logged in before calling this method.
     pub fn presign_model_download(
         &self,
         namespace: &str,
@@ -65,9 +62,33 @@ impl Client {
         model_name: &str,
         version: u32,
     ) -> Result<ModelDownloadResponse, ClientError> {
-        self.transport.get_json(format!(
+        self.presign_model_import_download(
+            namespace,
+            project_name,
+            model_name,
+            version,
+            namespace,
+            project_name,
+        )
+    }
+
+    pub fn presign_model_import_download(
+        &self,
+        namespace: &str,
+        project_name: &str,
+        model_name: &str,
+        version: u32,
+        source_namespace: &str,
+        source_project_name: &str,
+    ) -> Result<ModelDownloadResponse, ClientError> {
+        let mut url = self.transport.join(&format!(
             "projects/{namespace}/{project_name}/models/{model_name}/versions/{version}/download"
-        ))
+        ));
+        url.query_pairs_mut()
+            .append_pair("owner_name", source_namespace)
+            .append_pair("project_name", source_project_name);
+
+        self.transport.get_json(url)
     }
 
     pub fn request_model_version_upload(
