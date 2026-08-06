@@ -32,7 +32,17 @@ impl Client {
         }
     }
 
-    pub fn get_current_user(&self) -> Result<UserResponseSchema, ClientError> {
+    /// Log out of the Tracel server, destroying the current session.
+    pub fn logout(&self) -> Result<(), ClientError> {
+        self.transport.post("logout", None::<()>)
+    }
+
+    /// Get the user the current session belongs to.
+    ///
+    /// Returns `None` when the session is expired or was never authenticated — the server
+    /// answers with a `null` body rather than an error, so this is how callers detect that a
+    /// stored session token has died.
+    pub fn get_current_user(&self) -> Result<Option<UserResponseSchema>, ClientError> {
         let url = self.transport.join("user");
         self.transport.get_json(url)
     }
