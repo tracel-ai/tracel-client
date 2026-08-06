@@ -60,6 +60,8 @@ pub struct ModelDownloadResponse {
 pub struct PresignedModelFileUrlResponse {
     pub rel_path: String,
     pub url: String,
+    pub size_bytes: u64,
+    pub checksum: String,
 }
 
 #[derive(Deserialize, Clone, Debug)]
@@ -124,6 +126,27 @@ mod tests {
         .unwrap();
 
         assert_eq!(model.latest_version, None);
+    }
+
+    /// The presigned files carry the size and checksum a download is verified against.
+    #[test]
+    fn model_download_matches_backend_contract() {
+        let response: ModelDownloadResponse = serde_json::from_str(
+            r#"{
+                "files": [{
+                    "rel_path": "model.mpk",
+                    "url": "https://blobs.example.com/model.mpk?signature=x",
+                    "size_bytes": 1048576,
+                    "checksum": "9f86d0818"
+                }]
+            }"#,
+        )
+        .unwrap();
+
+        let file = &response.files[0];
+        assert_eq!(file.rel_path, "model.mpk");
+        assert_eq!(file.size_bytes, 1048576);
+        assert_eq!(file.checksum, "9f86d0818");
     }
 
     #[test]
