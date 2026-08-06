@@ -1,9 +1,20 @@
 use serde::Serialize;
 
+/// Who can access a project: kept in sync with the server's own `private`/`public` values.
+#[derive(Serialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum Visibility {
+    /// Only the owner and users explicitly granted access can see the project.
+    Private,
+    /// Every user can see the project.
+    Public,
+}
+
 #[derive(Serialize, Clone, Debug)]
 pub(crate) struct CreateProjectRequest {
     pub name: String,
     pub description: Option<String>,
+    pub visibility: Visibility,
 }
 
 /// Operating system of a binary target. Serializes to match the server's
