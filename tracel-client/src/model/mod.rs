@@ -5,7 +5,10 @@ use crate::{
     Client, ClientError,
     model::{
         request::{CreateModelRequest, RequestModelVersionUploadRequest},
-        response::{ModelDownloadResponse, ModelResponse, ModelVersionResponse},
+        response::{
+            ModelDownloadResponse, ModelListResponse, ModelResponse, ModelVersionListResponse,
+            ModelVersionResponse,
+        },
     },
     response::RequestModelVersionUploadResponse,
 };
@@ -24,6 +27,32 @@ impl Client {
             format!("projects/{namespace}/{project_name}/models"),
             Some(req),
         )
+    }
+
+    /// List the models of a project.
+    ///
+    /// Fails when the project is private and the client is not allowed to read it.
+    pub fn list_models(
+        &self,
+        namespace: &str,
+        project_name: &str,
+    ) -> Result<ModelListResponse, ClientError> {
+        self.transport
+            .get_json(format!("projects/{namespace}/{project_name}/models"))
+    }
+
+    /// List the published versions of a model.
+    ///
+    /// Fails when the project is private and the client is not allowed to read it.
+    pub fn list_model_versions(
+        &self,
+        namespace: &str,
+        project_name: &str,
+        model_name: &str,
+    ) -> Result<ModelVersionListResponse, ClientError> {
+        self.transport.get_json(format!(
+            "projects/{namespace}/{project_name}/models/{model_name}/versions"
+        ))
     }
 
     /// Get details about a specific model.

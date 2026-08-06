@@ -34,6 +34,21 @@ pub struct ModelResponse {
     pub created_by: CreatedByUserResponse,
     pub created_at: String,
     pub version_count: u64,
+    /// Highest published version, absent while the model has none.
+    #[serde(default)]
+    pub latest_version: Option<u32>,
+}
+
+#[derive(Deserialize, Clone, Debug)]
+pub struct ModelListResponse {
+    pub items: Vec<ModelResponse>,
+    pub total: usize,
+}
+
+#[derive(Deserialize, Clone, Debug)]
+pub struct ModelVersionListResponse {
+    pub items: Vec<ModelVersionResponse>,
+    pub total: usize,
 }
 
 #[derive(Deserialize, Clone, Debug)]
@@ -57,4 +72,84 @@ pub struct PresignedModelFileUploadUrlsResponse {
 pub struct RequestModelVersionUploadResponse {
     pub version: u32,
     pub files: Vec<PresignedModelFileUploadUrlsResponse>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn model_list_matches_backend_contract() {
+        let response: ModelListResponse = serde_json::from_str(
+            r#"{
+                "items": [{
+                    "id": "0198f0a1-0000-7000-8000-000000000000",
+                    "project_id": 3,
+                    "name": "resnet",
+                    "description": null,
+                    "created_by": {"id": 7, "username": "ada", "namespace": "ada"},
+                    "created_at": "2026-03-05 18:45:43.397",
+                    "version_count": 2,
+                    "latest_version": 2
+                }],
+                "total": 1
+            }"#,
+        )
+        .unwrap();
+
+        assert_eq!(response.total, 1);
+        let model = &response.items[0];
+        assert_eq!(model.name, "resnet");
+        assert_eq!(model.description, None);
+        assert_eq!(model.version_count, 2);
+        assert_eq!(model.latest_version, Some(2));
+        assert_eq!(model.created_by.username, "ada");
+    }
+
+    /// A model without a published version reports a null latest version.
+    #[test]
+    fn model_without_a_version_has_no_latest_version() {
+        let model: ModelResponse = serde_json::from_str(
+            r#"{
+                "id": "0198f0a1-0000-7000-8000-000000000000",
+                "project_id": 3,
+                "name": "resnet",
+                "description": "a model",
+                "created_by": {"id": 7, "username": "ada", "namespace": "ada"},
+                "created_at": "2026-03-05 18:45:43.397",
+                "version_count": 0,
+                "latest_version": null
+            }"#,
+        )
+        .unwrap();
+
+        assert_eq!(model.latest_version, None);
+    }
+
+    #[test]
+    fn model_version_list_matches_backend_contract() {
+        let response: ModelVersionListResponse = serde_json::from_str(
+            r#"{
+                "items": [{
+                    "id": "0198f0a1-0000-7000-8000-000000000001",
+                    "experiment": {"id": 12, "experiment_num": 4},
+                    "version": 1,
+                    "size": 2048,
+                    "checksum": "abc",
+                    "created_by": {"id": 7, "username": "ada", "namespace": "ada"},
+                    "created_at": "2026-03-05 18:45:43.397",
+                    "manifest": {"files": []},
+                    "metadata": null
+                }],
+                "total": 1
+            }"#,
+        )
+        .unwrap();
+
+        assert_eq!(response.total, 1);
+        let version = &response.items[0];
+        assert_eq!(version.version, 1);
+        assert_eq!(version.size, 2048);
+        assert_eq!(version.experiment.as_ref().unwrap().experiment_num, 4);
+    }
 }
