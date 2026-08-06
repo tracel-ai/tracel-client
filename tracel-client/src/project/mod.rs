@@ -4,7 +4,7 @@ pub mod response;
 use crate::{
     Client, ClientError,
     project::{
-        request::{CreateProjectRequest, PublishProjectVersionRequest},
+        request::{CreateProjectRequest, PublishProjectVersionRequest, Visibility},
         response::{CodeUploadUrlsResponse, ProjectResponse},
     },
 };
@@ -14,11 +14,13 @@ impl Client {
         &self,
         project_name: &str,
         project_description: Option<&str>,
+        visibility: Visibility,
         path: impl AsRef<str>,
     ) -> Result<ProjectResponse, ClientError> {
         let project_data = CreateProjectRequest {
             name: project_name.to_string(),
             description: project_description.map(|desc| desc.to_string()),
+            visibility,
         };
 
         self.transport.post_json(path, Some(project_data))
@@ -28,8 +30,14 @@ impl Client {
         &self,
         project_name: &str,
         project_description: Option<&str>,
+        visibility: Visibility,
     ) -> Result<ProjectResponse, ClientError> {
-        self.create_project(project_name, project_description, "user/projects")
+        self.create_project(
+            project_name,
+            project_description,
+            visibility,
+            "user/projects",
+        )
     }
 
     pub fn get_project(
@@ -46,10 +54,12 @@ impl Client {
         owner_name: &str,
         project_name: &str,
         project_description: Option<&str>,
+        visibility: Visibility,
     ) -> Result<ProjectResponse, ClientError> {
         self.create_project(
             project_name,
             project_description,
+            visibility,
             format!("organizations/{owner_name}/projects"),
         )
     }
