@@ -16,4 +16,8 @@ pub struct ModelFileSpecRequest {
 #[derive(Serialize, Clone, Debug)]
 pub struct RequestModelVersionUploadRequest {
     pub files: Vec<ModelFileSpecRequest>,
+    /// Opaque, app-defined blob stored with the version, returned verbatim on
+    /// reads. Omitted from the request when absent, for servers that predate it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub metadata: Option<serde_json::Value>,
 }

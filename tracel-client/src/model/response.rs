@@ -17,6 +17,10 @@ pub struct ModelVersionResponse {
     pub created_by: CreatedByUserResponse,
     pub created_at: String,
     pub manifest: serde_json::Value,
+    /// Opaque, app-defined blob stored with the version — `Null` when the
+    /// publisher set none.
+    #[serde(default)]
+    pub metadata: serde_json::Value,
 }
 
 #[derive(Deserialize, Clone, Debug)]
@@ -174,5 +178,41 @@ mod tests {
         assert_eq!(version.version, 1);
         assert_eq!(version.size, 2048);
         assert_eq!(version.experiment.as_ref().unwrap().experiment_num, 4);
+        assert!(version.metadata.is_null());
+    }
+
+    /// The metadata blob comes back exactly as the publisher stored it, and a
+    /// server that predates the field reads as no metadata rather than an error.
+    #[test]
+    fn version_metadata_round_trips_verbatim() {
+        let version: ModelVersionResponse = serde_json::from_str(
+            r#"{
+                "id": "0198f0a1-0000-7000-8000-000000000001",
+                "experiment": null,
+                "version": 2,
+                "size": 2048,
+                "checksum": "abc",
+                "created_by": {"id": 7, "username": "ada", "namespace": "ada"},
+                "created_at": "2026-03-05 18:45:43.397",
+                "manifest": {"files": []},
+                "metadata": {"metabolic": {"repo": "Qwen/Qwen3-0.6B"}}
+            }"#,
+        )
+        .unwrap();
+
+        assert_eq!(version.metadata["metabolic"]["repo"], "Qwen/Qwen3-0.6B");
+
+        let without_field = r#"{
+            "id": "0198f0a1-0000-7000-8000-000000000001",
+            "experiment": null,
+            "version": 2,
+            "size": 2048,
+            "checksum": "abc",
+            "created_by": {"id": 7, "username": "ada", "namespace": "ada"},
+            "created_at": "2026-03-05 18:45:43.397",
+            "manifest": {"files": []}
+        }"#;
+        let version: ModelVersionResponse = serde_json::from_str(without_field).unwrap();
+        assert!(version.metadata.is_null());
     }
 }
