@@ -1,12 +1,6 @@
-//! Turning credentials into a session the client can use.
+//! Turning [`TracelCredentials`] into a session.
 //!
-//! The two kinds of [`TracelCredentials`] reach the server differently — an API
-//! key has to be exchanged, a session token already is a session — and this is
-//! where that difference stops mattering, so
-//! [`Client::connect`](crate::Client::connect) has a single path.
-//!
-//! [`crate::auth`] is the other half: it issues session tokens in the first
-//! place, for devices that cannot host a browser.
+//! An API key has to be exchanged for one; a session token already is one.
 
 use reqwest::header::SET_COOKIE;
 use serde::Serialize;
@@ -21,10 +15,9 @@ struct ApiKeyLoginRequest<'a> {
     api_key: &'a str,
 }
 
-/// Establish an authenticated session on `transport`.
+/// Establishes an authenticated session on `transport`.
 ///
-/// Only the API key path makes a request; a session token needs no exchange.
-/// Neither path proves the session is live — the caller does that.
+/// Neither path proves the session is live; the caller does that.
 pub fn authenticate(
     transport: &ApiTransport,
     credentials: &TracelCredentials,
@@ -37,7 +30,7 @@ pub fn authenticate(
     }
 }
 
-/// Trade an API key for the session the server opens for it.
+/// Trades an API key for the session the server opens for it.
 fn exchange_api_key(transport: &ApiTransport, api_key: &str) -> Result<Auth, ClientError> {
     let form = transport
         .request(reqwest::Method::POST, "login/api-key")
@@ -47,8 +40,7 @@ fn exchange_api_key(transport: &ApiTransport, api_key: &str) -> Result<Auth, Cli
 
     let response = form.send()?.map_to_tracel_err()?;
 
-    // The session arrives as a `Set-Cookie`, which the transport wants back
-    // verbatim as the `Cookie` request header.
+    // The transport sends this back verbatim as the `Cookie` request header.
     let cookie = response
         .headers()
         .get(SET_COOKIE)

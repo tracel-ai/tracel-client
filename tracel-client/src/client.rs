@@ -52,18 +52,12 @@ impl Env {
 }
 
 impl Client {
-    /// Connect to the Tracel server and verify the credentials.
+    /// Connects to the Tracel server and verifies the credentials.
     ///
-    /// Accepts either kind of [`TracelCredentials`]. An API key is exchanged
-    /// for a session first; a session token is used as-is. Both paths then read
-    /// back the authenticated user, so a client only exists once the server has
-    /// been reached *and* the session has been proven live — a connection
-    /// failure and a rejected credential are distinguishable up front rather
-    /// than on some later unrelated call.
-    ///
-    /// Fails with [`ClientError::Unauthorized`] when the credentials are
-    /// rejected. Session tokens come from the device authorization flow, see
-    /// [`DeviceAuthClient`](crate::auth::DeviceAuthClient).
+    /// An API key is exchanged for a session; a session token is used as-is.
+    /// Both paths then read back the authenticated user, so the returned client
+    /// is known to work. Fails with [`ClientError::Unauthorized`] if the
+    /// credentials are rejected.
     pub fn connect(env: Env, credentials: &TracelCredentials) -> Result<Self, ClientError> {
         Self::connect_to(env.get_url(), env, credentials)
     }
@@ -76,9 +70,8 @@ impl Client {
         let mut transport = ApiTransport::new(url);
         transport.set_auth(authenticate(&transport, credentials)?);
 
-        // Proves the session is live, whichever way it was established. The
-        // endpoint answers 200 with a `null` body rather than 401 when it is
-        // not.
+        // Proves the session is live. The endpoint answers 200 with a `null`
+        // body rather than 401 when it is not.
         let url = transport.join("user");
         let user = transport
             .get_json::<Option<UserResponseSchema>>(url)?
@@ -109,9 +102,8 @@ impl Client {
 
     /// The user this client is authenticated as.
     ///
-    /// Read once by [`Client::connect`], so this costs no request and never
-    /// changes for the life of the client. Use
-    /// [`get_current_user`](Client::get_current_user) to re-read it.
+    /// Read once on connect, so this costs no request. Use
+    /// [`get_current_user`](Client::get_current_user) to refresh it.
     pub fn user(&self) -> &UserResponseSchema {
         &self.user
     }

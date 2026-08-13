@@ -1,8 +1,9 @@
-//! OAuth 2.0 Device Authorization Grant (RFC 8628).
+//! OAuth 2.0 Device Authorization Grant ([RFC 8628]).
 //!
-//! Lets a device that cannot host a browser — a CLI, a training node, a
-//! headless station — obtain a Burn Central session by asking the user to
-//! approve a short code on another device.
+//! Obtains a session on a device that cannot host a browser, by having the user
+//! approve a short code elsewhere.
+//!
+//! # Examples
 //!
 //! ```no_run
 //! use tracel_client::{Client, Env, TracelCredentials, auth::DeviceAuthClient};
@@ -10,22 +11,16 @@
 //! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! let device_auth = DeviceAuthClient::new(Env::Production, "tracel-cli");
 //!
-//! let session_token = device_auth.authorize(|authorization| {
-//!     println!("Open {}", authorization.verification_uri_complete);
-//!     println!("and confirm the code {}", authorization.user_code);
+//! let token = device_auth.authorize(|auth| {
+//!     println!("Open {} and enter {}", auth.verification_uri, auth.user_code);
 //! })?;
 //!
-//! // The session token can be persisted and reused until it expires.
-//! let credentials = TracelCredentials::session_token(session_token);
-//! let client = Client::connect(Env::Production, &credentials)?;
-//! println!("Signed in as {}", client.user().username);
+//! let client = Client::connect(Env::Production, &TracelCredentials::session_token(token))?;
 //! # Ok(())
 //! # }
 //! ```
 //!
-//! [`DeviceAuthClient::authorize`] blocks until the user answers. Drive the
-//! flow yourself with [`DeviceAuthClient::start`] and
-//! [`DeviceAuthClient::poll`] when that does not fit.
+//! [RFC 8628]: https://datatracker.ietf.org/doc/html/rfc8628
 
 mod error;
 mod request;
@@ -47,33 +42,30 @@ use response::DeviceSessionResponse;
 pub use error::{DeviceFlowError, OAuthErrorCode};
 pub use response::DeviceCodeResponse;
 
-/// Grant type identifier of the device authorization flow (RFC 8628 section 3.4).
+/// `grant_type` of the device authorization flow (RFC 8628 §3.4).
 const DEVICE_CODE_GRANT: &str = "urn:ietf:params:oauth:grant-type:device_code";
 
-/// Added to the poll interval every time the server answers `slow_down`.
+/// Added to the poll interval on every `slow_down`.
 ///
-/// The server permanently raises its own required interval by this much and
-/// does not report the new value, so the client has to mirror the increase.
+/// The server raises its own interval by this much without reporting the new
+/// value, so the client mirrors it.
 const SLOW_DOWN_INCREMENT: Duration = Duration::from_secs(5);
 
-/// Floor for the poll interval, in case the server reports a zero interval.
+/// Lower bound on the poll interval.
 const MIN_POLL_INTERVAL: Duration = Duration::from_secs(1);
 
-/// Result of a single poll of the token endpoint.
+/// Outcome of a single [`DeviceAuthClient::poll`].
 #[derive(Debug, Clone)]
 pub enum DevicePollOutcome {
-    /// The user has not answered yet. Poll again after the interval.
+    /// The user has not answered yet.
     Pending,
-    /// The last poll came too early. Add five seconds to the interval before
-    /// polling again — the server raised its own requirement by that much.
+    /// Polled too soon; back off by five seconds.
     SlowDown,
     /// The user approved the request.
     Approved(SessionToken),
 }
 
-/// A client for the OAuth 2.0 Device Authorization Grant.
-///
-/// Unauthenticated by construction — obtaining credentials is what it is for.
+/// Client for the device authorization flow.
 #[derive(Debug, Clone)]
 pub struct DeviceAuthClient {
     transport: ApiTransport,
@@ -81,12 +73,11 @@ pub struct DeviceAuthClient {
 }
 
 impl DeviceAuthClient {
-    /// Create a client for the given environment.
+    /// Creates a client for `env`.
     ///
-    /// `client_id` identifies the application requesting authorization, for
-    /// example `tracel-cli`. It is echoed back on every poll and must be
-    /// non-empty, at most 128 bytes, free of control characters, and free of
-    /// leading and trailing whitespace.
+    /// `client_id` identifies the requesting application, e.g. `tracel-cli`. It
+    /// must be non-empty, at most 128 bytes, and free of control characters and
+    /// surrounding whitespace.
     pub fn new(env: Env, client_id: impl Into<String>) -> Self {
         Self {
             transport: ApiTransport::new(env.get_url()),
@@ -94,7 +85,7 @@ impl DeviceAuthClient {
         }
     }
 
-    /// Create a client with a custom base URL.
+    /// Creates a client for a custom base URL.
     pub fn from_url(url: Url, client_id: impl Into<String>) -> Self {
         Self {
             transport: ApiTransport::new(url),
@@ -102,13 +93,19 @@ impl DeviceAuthClient {
         }
     }
 
-    /// The client identifier this client authorizes as.
+    /// Returns the client identifier.
     pub fn client_id(&self) -> &str {
         &self.client_id
     }
 
-    /// Run the whole flow: request a device code, hand it to `on_started` so
-    /// it can be shown to the user, then block until the request is answered.
+    /// Runs the flow to completion.
+    ///
+    /// Calls `on_started` with the pending authorization so it can be shown to
+    /// the user, then blocks until the request is answered. Use [`start`] and
+    /// [`poll`] to drive the flow manually.
+    ///
+    /// [`start`]: Self::start
+    /// [`poll`]: Self::poll
     pub fn authorize<F>(&self, on_started: F) -> Result<SessionToken, DeviceFlowError>
     where
         F: FnOnce(&DeviceCodeResponse),
@@ -118,10 +115,7 @@ impl DeviceAuthClient {
         self.wait_for_approval(&authorization)
     }
 
-    /// Request a device code.
-    ///
-    /// The returned [`DeviceCodeResponse`] carries the user code and the
-    /// verification URI to show the user, and the device code to poll with.
+    /// Requests a device code.
     pub fn start(&self) -> Result<DeviceCodeResponse, DeviceFlowError> {
         self.post_form(
             "auth/device/code",
@@ -131,12 +125,10 @@ impl DeviceAuthClient {
         )
     }
 
-    /// Poll the token endpoint once.
+    /// Polls the token endpoint once.
     ///
-    /// Returns an error only when the flow cannot continue — the user denied
-    /// the request, the code expired, or the request itself was rejected.
-    /// A user who has simply not answered yet yields
-    /// [`DevicePollOutcome::Pending`].
+    /// A pending or throttled poll is an [`Ok`] outcome; only a terminal
+    /// failure is an error.
     pub fn poll(&self, device_code: &str) -> Result<DevicePollOutcome, DeviceFlowError> {
         let request = DeviceTokenRequest {
             grant_type: DEVICE_CODE_GRANT,
@@ -158,10 +150,10 @@ impl DeviceAuthClient {
         }
     }
 
-    /// Poll until the user answers, the code expires, or the request is denied.
+    /// Blocks until the user answers or `authorization` expires.
     ///
-    /// Blocks the calling thread, waiting the interval the server asked for
-    /// between polls and backing off further whenever it answers `slow_down`.
+    /// Sleeps for the interval the server asked for between polls, backing off
+    /// further on `slow_down`.
     pub fn wait_for_approval(
         &self,
         authorization: &DeviceCodeResponse,
@@ -176,9 +168,8 @@ impl DeviceAuthClient {
                 return Err(DeviceFlowError::TimedOut(lifetime));
             }
 
-            // Wait before the first poll as well: the answer can only be
-            // `pending` until the user has had time to open the page, and
-            // polling too eagerly makes the server raise the interval.
+            // Sleep before the first poll too: polling eagerly only makes the
+            // server raise the interval.
             std::thread::sleep(interval.min(remaining));
 
             match self.poll(&authorization.device_code)? {
@@ -189,12 +180,10 @@ impl DeviceAuthClient {
         }
     }
 
-    /// Send a form-encoded request and decode a JSON response.
+    /// Sends a form-encoded request and decodes a JSON response.
     ///
-    /// The device authorization endpoints are form-encoded rather than JSON,
-    /// and report failures as `{"error": "<code>"}` with HTTP 400 instead of
-    /// the usual `{"code", "message"}` envelope, so neither
-    /// [`ApiTransport::post_json`] nor the generic error mapping applies.
+    /// These endpoints take forms rather than JSON and report failures as
+    /// `{"error": "<code>"}`, so the transport's JSON helpers do not apply.
     fn post_form<B, R>(&self, path: &str, body: &B) -> Result<R, DeviceFlowError>
     where
         B: serde::Serialize,
@@ -219,7 +208,7 @@ impl DeviceAuthClient {
     }
 }
 
-/// Turn an HTTP 400 response into a device flow error.
+/// Maps an HTTP 400 response to a [`DeviceFlowError`].
 fn bad_request_error(response: reqwest::blocking::Response) -> DeviceFlowError {
     let status = response.status();
     match response.text() {
@@ -228,9 +217,8 @@ fn bad_request_error(response: reqwest::blocking::Response) -> DeviceFlowError {
     }
 }
 
-/// These endpoints answer 400 with an OAuth envelope for flow errors, but with
-/// the usual `{"code", "message"}` envelope when the request is rejected before
-/// the flow is entered — an invalid `client_id`, for instance.
+/// Flow errors use the OAuth envelope; requests rejected before the flow starts,
+/// such as an invalid `client_id`, use the usual `{"code", "message"}` one.
 fn parse_bad_request_body(status: reqwest::StatusCode, body: String) -> DeviceFlowError {
     if let Ok(oauth) = serde_json::from_str::<OAuthErrorResponse>(&body) {
         return oauth.error.into();

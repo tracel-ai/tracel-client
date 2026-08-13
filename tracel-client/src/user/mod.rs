@@ -6,10 +6,9 @@ use crate::{
 };
 
 impl Client {
-    /// Re-read the authenticated user from the server.
+    /// Fetches the authenticated user.
     ///
-    /// [`Client::user`] returns the copy taken when the client connected,
-    /// without a request.
+    /// [`Client::user`] returns the copy taken on connect, without a request.
     pub fn get_current_user(&self) -> Result<UserResponseSchema, ClientError> {
         let url = self.transport.join("user");
 

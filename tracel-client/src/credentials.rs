@@ -3,8 +3,8 @@ use std::str::FromStr;
 
 /// Credentials to connect to the Tracel server.
 ///
-/// Either kind authorizes a [`Client`](crate::Client) through the same
-/// entrypoint, [`Client::connect`](crate::Client::connect).
+/// Either kind authorizes a [`Client`](crate::Client) through
+/// [`Client::connect`](crate::Client::connect).
 #[derive(Clone, PartialEq, Eq)]
 pub enum TracelCredentials {
     /// A long-lived API key, created from the Tracel console.
@@ -24,7 +24,7 @@ impl TracelCredentials {
         Self::SessionToken(session_token)
     }
 
-    /// Creates a new instance of `TracelCredentials` from environment variables.
+    /// Reads credentials from the environment.
     ///
     /// `TRACEL_API_KEY` takes precedence over `TRACEL_SESSION_TOKEN`.
     pub fn from_env() -> Result<Self, std::env::VarError> {
@@ -36,7 +36,7 @@ impl TracelCredentials {
     }
 }
 
-/// Redacts the secret, whichever kind it is.
+/// Redacts the secret.
 impl Debug for TracelCredentials {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -54,10 +54,8 @@ impl From<SessionToken> for TracelCredentials {
 
 /// An opaque Tracel session token.
 ///
-/// Session tokens are issued by the device authorization flow
-/// ([`DeviceAuthClient`](crate::auth::DeviceAuthClient)) and authorize a
-/// [`Client`](crate::Client) without an API key. They expire after a day of
-/// inactivity.
+/// Issued by [`DeviceAuthClient`](crate::auth::DeviceAuthClient). Expires after
+/// a day of inactivity.
 #[derive(Clone, PartialEq, Eq)]
 pub struct SessionToken(String);
 
@@ -66,7 +64,7 @@ impl SessionToken {
         Self(token.into())
     }
 
-    /// Creates a new instance of `SessionToken` from environment variables.
+    /// Reads a session token from `TRACEL_SESSION_TOKEN`.
     pub fn from_env() -> Result<Self, std::env::VarError> {
         let token = std::env::var("TRACEL_SESSION_TOKEN")?;
         Ok(Self::new(token))
@@ -81,7 +79,7 @@ impl SessionToken {
     }
 }
 
-/// Redacts the token, which grants full access to the account it belongs to.
+/// Redacts the token.
 impl Debug for SessionToken {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.write_str("SessionToken([REDACTED])")
