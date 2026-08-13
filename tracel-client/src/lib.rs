@@ -1,4 +1,5 @@
 mod artifact;
+mod auth;
 mod client;
 mod credentials;
 mod error;
@@ -48,7 +49,11 @@ pub use tracel::*;
 #[cfg(feature = "tracel")]
 pub use client::Client;
 
+pub use auth::{
+    DeviceAuthClient, DeviceCodeResponse, DeviceFlowError, DevicePollOutcome, OAuthErrorCode,
+};
 pub use client::Env;
+pub use credentials::SessionToken;
 pub use error::{ApiErrorCode, ClientError};
 
 pub use websocket::WebSocketClient;
