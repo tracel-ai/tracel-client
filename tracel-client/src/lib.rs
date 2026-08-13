@@ -1,5 +1,5 @@
 mod artifact;
-mod auth;
+pub mod auth;
 mod client;
 mod credentials;
 mod error;
@@ -8,6 +8,7 @@ pub mod inference;
 mod job;
 mod model;
 mod project;
+mod session;
 mod transport;
 mod user;
 
@@ -49,9 +50,6 @@ pub use tracel::*;
 #[cfg(feature = "tracel")]
 pub use client::Client;
 
-pub use auth::{
-    DeviceAuthClient, DeviceCodeResponse, DeviceFlowError, DevicePollOutcome, OAuthErrorCode,
-};
 pub use client::Env;
 pub use credentials::SessionToken;
 pub use error::{ApiErrorCode, ClientError};

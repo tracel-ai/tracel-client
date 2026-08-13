@@ -55,7 +55,7 @@ impl From<SessionToken> for TracelCredentials {
 /// An opaque Tracel session token.
 ///
 /// Session tokens are issued by the device authorization flow
-/// ([`DeviceAuthClient`](crate::DeviceAuthClient)) and authorize a
+/// ([`DeviceAuthClient`](crate::auth::DeviceAuthClient)) and authorize a
 /// [`Client`](crate::Client) without an API key. They expire after a day of
 /// inactivity.
 #[derive(Clone, PartialEq, Eq)]

@@ -1,9 +1,9 @@
 use reqwest::Url;
 use serde::{Deserialize, Serialize};
 
-use crate::auth::authenticate;
 use crate::credentials::TracelCredentials;
 use crate::error::{ApiErrorBody, ApiErrorCode, ClientError};
+use crate::session::authenticate;
 use crate::transport::ApiTransport;
 use crate::user::response::UserResponseSchema;
 
@@ -63,7 +63,7 @@ impl Client {
     ///
     /// Fails with [`ClientError::Unauthorized`] when the credentials are
     /// rejected. Session tokens come from the device authorization flow, see
-    /// [`DeviceAuthClient`](crate::DeviceAuthClient).
+    /// [`DeviceAuthClient`](crate::auth::DeviceAuthClient).
     pub fn connect(env: Env, credentials: &TracelCredentials) -> Result<Self, ClientError> {
         Self::connect_to(env.get_url(), env, credentials)
     }
