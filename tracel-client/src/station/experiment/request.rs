@@ -41,6 +41,9 @@ pub struct CreateArtifactRequest {
     pub name: String,
     pub kind: String,
     pub files: Vec<ArtifactFileSpecRequest>,
+    /// Id of the activity that produced this artifact, if any.
+    #[serde(default)]
+    pub activity: Option<u64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
