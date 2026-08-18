@@ -3,11 +3,24 @@ use reqwest::header::COOKIE;
 
 use crate::error::{ApiErrorBody, ApiErrorCode, ClientError};
 
+/// Name of the session cookie the Tracel API issues.
+const SESSION_COOKIE_NAME: &str = "id";
+
 #[derive(Debug, Clone)]
 pub enum Auth {
     None,
     SessionCookie(String),
     Bearer(String),
+}
+
+impl Auth {
+    /// Session cookie auth for a raw session token.
+    ///
+    /// The device flow returns the bare session id, not a `Set-Cookie` header,
+    /// so the cookie has to be built here.
+    pub fn session_token(token: &str) -> Self {
+        Auth::SessionCookie(format!("{SESSION_COOKIE_NAME}={token}"))
+    }
 }
 
 #[derive(Debug, Clone)]

@@ -3,7 +3,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::credentials::TracelCredentials;
 use crate::error::{ApiErrorBody, ApiErrorCode, ClientError};
-use crate::transport::{ApiTransport, Auth};
+use crate::session::authenticate;
+use crate::transport::ApiTransport;
+use crate::user::response::UserResponseSchema;
 
 impl From<reqwest::Error> for ClientError {
     fn from(error: reqwest::Error) -> Self {
@@ -27,6 +29,7 @@ impl From<reqwest::Error> for ClientError {
 pub struct Client {
     pub(crate) transport: ApiTransport,
     pub(crate) env: Env,
+    user: UserResponseSchema,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -49,29 +52,42 @@ impl Env {
 }
 
 impl Client {
-    /// Create a new HttpClient with the given base URL and API key.
-    pub fn new(env: Env, credentials: &TracelCredentials) -> Result<Self, ClientError> {
-        let mut client = Client {
-            transport: ApiTransport::new(env.get_url()),
-            env: env.clone(),
-        };
+    /// Connects to the Tracel server and verifies the credentials.
+    ///
+    /// An API key is exchanged for a session; a session token is used as-is.
+    /// Both paths then read back the authenticated user, so the returned client
+    /// is known to work. Fails with [`ClientError::Unauthorized`] if the
+    /// credentials are rejected.
+    pub fn connect(env: Env, credentials: &TracelCredentials) -> Result<Self, ClientError> {
+        Self::connect_to(env.get_url(), env, credentials)
+    }
 
-        let cookie = client.login(credentials)?;
-        client.transport.set_auth(Auth::SessionCookie(cookie));
-        Ok(client)
+    fn connect_to(
+        url: Url,
+        env: Env,
+        credentials: &TracelCredentials,
+    ) -> Result<Self, ClientError> {
+        let mut transport = ApiTransport::new(url);
+        transport.set_auth(authenticate(&transport, credentials)?);
+
+        // Proves the session is live. The endpoint answers 200 with a `null`
+        // body rather than 401 when it is not.
+        let url = transport.join("user");
+        let user = transport
+            .get_json::<Option<UserResponseSchema>>(url)?
+            .ok_or(ClientError::Unauthorized)?;
+
+        Ok(Client {
+            transport,
+            env,
+            user,
+        })
     }
 
     #[deprecated]
     /// Please use environment based constructor
     pub fn from_url(url: Url, credentials: &TracelCredentials) -> Result<Self, ClientError> {
-        let mut client = Client {
-            transport: ApiTransport::new(url),
-            env: Env::Production,
-        };
-
-        let cookie = client.login(credentials)?;
-        client.transport.set_auth(Auth::SessionCookie(cookie));
-        Ok(client)
+        Self::connect_to(url, Env::Production, credentials)
     }
 
     #[deprecated]
@@ -82,5 +98,13 @@ impl Client {
 
     pub fn get_env(&self) -> &Env {
         &self.env
+    }
+
+    /// The user this client is authenticated as.
+    ///
+    /// Read once on connect, so this costs no request. Use
+    /// [`get_current_user`](Client::get_current_user) to refresh it.
+    pub fn user(&self) -> &UserResponseSchema {
+        &self.user
     }
 }

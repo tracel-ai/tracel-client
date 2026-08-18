@@ -1,4 +1,5 @@
 mod artifact;
+pub mod auth;
 mod client;
 mod credentials;
 mod error;
@@ -7,6 +8,7 @@ pub mod inference;
 mod job;
 mod model;
 mod project;
+mod session;
 mod transport;
 mod user;
 
@@ -49,6 +51,7 @@ pub use tracel::*;
 pub use client::Client;
 
 pub use client::Env;
+pub use credentials::SessionToken;
 pub use error::{ApiErrorCode, ClientError};
 
 pub use websocket::WebSocketClient;
