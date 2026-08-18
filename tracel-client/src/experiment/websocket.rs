@@ -21,6 +21,7 @@ pub struct ActivityRequest {
 pub enum ActivityStatusRequest {
     Success,
     Abandoned,
+    Failed,
 }
 
 #[derive(Debug, Serialize)]
@@ -83,6 +84,9 @@ pub struct LogEntry {
     pub level: LogEntryLevel,
     pub message: String,
     pub metadata: serde_json::Map<String, serde_json::Value>,
+    /// Id of the activity this line was emitted under, if any.
+    #[serde(default)]
+    pub activity: Option<u64>,
 }
 
 #[derive(Debug, Serialize)]
@@ -93,6 +97,9 @@ pub enum ExperimentMessage {
         split: String,
         iteration: usize,
         items: Vec<MetricLog>,
+        /// Id of the activity this sample was recorded under, if any.
+        #[serde(default)]
+        activity: Option<u64>,
     },
     MetricDefinitionLog {
         name: String,
@@ -104,6 +111,16 @@ pub enum ExperimentMessage {
         epoch: usize,
         split: String,
         best_metric_values: Vec<MetricLog>,
+        /// Id of the activity this summary was recorded under, if any.
+        #[serde(default)]
+        activity: Option<u64>,
+    },
+    /// Scalar metric summary with no epoch axis.
+    SummaryLog {
+        items: Vec<MetricLog>,
+        /// Id of the activity this summary was recorded under, if any.
+        #[serde(default)]
+        activity: Option<u64>,
     },
     LogEntries(Vec<LogEntry>),
     Arguments(serde_json::Value),
