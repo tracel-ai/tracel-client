@@ -72,8 +72,9 @@ jobs:
   publish-crate:
     needs: create-release
     if: needs.create-release.outputs.release_created == 'true'
-    uses: tracel-ai/github-actions/.github/workflows/publish-crate.yml@v1
+    uses: tracel-ai/github-actions/.github/workflows/publish-crate.yml@v11
     with:
       crate: tracel-client
+      tag-validation: false
     secrets:
       CRATES_IO_API_TOKEN: ${{ secrets.CRATES_IO_API_TOKEN }}
