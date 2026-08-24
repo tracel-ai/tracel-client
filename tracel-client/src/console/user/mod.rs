@@ -1,8 +1,9 @@
 pub mod response;
 
 use crate::{
-    Client, ClientError,
-    user::response::{GetUserOrganizationsResponse, UserResponseSchema},
+    ClientError,
+    console::Client,
+    console::user::response::{GetUserOrganizationsResponse, UserResponseSchema},
 };
 
 impl Client {

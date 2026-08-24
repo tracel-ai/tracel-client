@@ -81,3 +81,18 @@ impl ClientError {
         matches!(self, ClientError::Unauthorized)
     }
 }
+
+impl From<reqwest::Error> for ClientError {
+    fn from(error: reqwest::Error) -> Self {
+        match error.status() {
+            Some(status) => ClientError::ApiError {
+                status,
+                body: ApiErrorBody {
+                    code: ApiErrorCode::Unknown,
+                    message: error.to_string(),
+                },
+            },
+            None => ClientError::UnknownError(error.to_string()),
+        }
+    }
+}

@@ -50,7 +50,7 @@ pub struct PresignedModelFileUrlResponse {
 #[derive(Deserialize, Clone, Debug)]
 pub struct PresignedModelFileUploadUrlsResponse {
     pub rel_path: String,
-    pub urls: crate::artifact::response::MultipartUploadResponse,
+    pub urls: crate::console::artifact::response::MultipartUploadResponse,
 }
 
 #[derive(Deserialize, Clone, Debug)]

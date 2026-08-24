@@ -2,8 +2,9 @@ pub mod request;
 pub mod response;
 
 use crate::{
-    Client, ClientError,
-    artifact::{
+    ClientError,
+    console::Client,
+    console::artifact::{
         request::{
             AddFilesToArtifactRequest, ArtifactFileSpecRequest, CompleteUploadRequest,
             CreateArtifactRequest,

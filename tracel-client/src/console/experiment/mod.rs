@@ -1,14 +1,14 @@
 pub mod request;
 pub mod response;
-pub mod websocket;
 
 use std::collections::HashMap;
 
 use serde_json::Value;
 
 use crate::{
-    Client, ClientError, WebSocketClient,
-    experiment::{request::CreateExperimentSchema, response::ExperimentResponse},
+    ClientError, WebSocketClient,
+    console::Client,
+    console::experiment::{request::CreateExperimentSchema, response::ExperimentResponse},
     websocket::WebSocketError,
 };
 

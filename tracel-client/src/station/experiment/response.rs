@@ -3,6 +3,8 @@ use std::collections::HashMap;
 use serde::Deserialize;
 use serde_json::Value;
 
+pub use crate::station::upload::PresignedUploadUrlResponse;
+
 #[derive(Debug, Clone, Deserialize)]
 pub struct ExperimentResponse {
     pub id: i32,
@@ -66,13 +68,6 @@ pub struct MetricGroupResponse {
 #[derive(Debug, Clone, Deserialize)]
 pub struct MetricResponse {
     pub groups: Vec<MetricGroupResponse>,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct PresignedUploadUrlResponse {
-    pub part: u32,
-    pub url: String,
-    pub size_bytes: u64,
 }
 
 #[derive(Debug, Clone, Deserialize)]
