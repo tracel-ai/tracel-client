@@ -12,4 +12,5 @@ pub mod console;
 pub mod station;
 
 pub use error::{ApiErrorCode, ClientError};
+pub use reqwest::Url;
 pub use websocket::WebSocketClient;

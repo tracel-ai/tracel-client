@@ -69,10 +69,21 @@ impl Client {
         })
     }
 
-    #[deprecated]
-    /// Please use environment based constructor
+    /// Connects to a custom base URL and verifies the credentials.
+    ///
+    /// For servers [`Env`] cannot name, such as a local devstack. Behaves like
+    /// [`connect`](Client::connect) otherwise.
     pub fn from_url(url: Url, credentials: &TracelCredentials) -> Result<Self, ClientError> {
         Self::connect_to(url, Env::Production, credentials)
+    }
+
+    /// Ends the session this client is authenticated with.
+    ///
+    /// Consumes the client: after the server has revoked the session, no call
+    /// through it can succeed. Fails with [`ClientError::Unauthorized`] if the
+    /// session had already expired.
+    pub fn logout(self) -> Result<(), ClientError> {
+        self.transport.post("logout", None::<serde_json::Value>)
     }
 
     #[deprecated]
