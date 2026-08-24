@@ -12,4 +12,7 @@ pub mod console;
 pub mod station;
 
 pub use error::{ApiErrorCode, ClientError};
+/// The URL type the constructors take, so consumers need no `url` dependency
+/// of their own.
+pub use reqwest::Url;
 pub use websocket::WebSocketClient;
