@@ -21,15 +21,17 @@ pub mod websocket;
 #[cfg(feature = "station")]
 pub use station::StationClient;
 
-#[cfg(feature = "station")]
+#[cfg(feature = "tracel")]
 mod tracel {
     use super::*;
     pub use credentials::TracelCredentials;
+    #[cfg(feature = "station")]
     pub use fleet::FleetClient;
 
     pub mod response {
         pub use crate::artifact::response::*;
         pub use crate::experiment::response::*;
+        #[cfg(feature = "station")]
         pub use crate::fleet::response::*;
         pub use crate::model::response::*;
         pub use crate::project::response::*;
@@ -38,6 +40,7 @@ mod tracel {
 
     pub mod request {
         pub use crate::artifact::request::*;
+        #[cfg(feature = "station")]
         pub use crate::fleet::request::*;
         pub use crate::model::request::*;
         pub use crate::project::request::*;

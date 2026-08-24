@@ -10,6 +10,9 @@ const SESSION_COOKIE_NAME: &str = "id";
 pub enum Auth {
     None,
     SessionCookie(String),
+    // Constructed only by the station's fleet client; the match arms stay
+    // unconditional so the transport is feature-free.
+    #[cfg_attr(not(feature = "station"), allow(dead_code))]
     Bearer(String),
 }
 
