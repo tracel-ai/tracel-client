@@ -9,7 +9,10 @@ use tungstenite::{
     Message, Utf8Bytes, WebSocket, client::IntoClientRequest, connect, stream::MaybeTlsStream,
 };
 
-pub use crate::experiment::websocket::*;
+mod protocol;
+
+pub use protocol::*;
+
 use crate::transport::Auth;
 
 #[derive(Error, Debug)]
@@ -80,10 +83,6 @@ impl WebSocketClient {
             Auth::None => {}
             Auth::SessionCookie(cookie) => {
                 req.headers_mut().insert(COOKIE, cookie.parse().unwrap());
-            }
-            Auth::Bearer(token) => {
-                req.headers_mut()
-                    .insert("Authorization", format!("Bearer {token}").parse().unwrap());
             }
         }
 

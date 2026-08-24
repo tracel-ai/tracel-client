@@ -1,26 +1,11 @@
 use reqwest::Url;
 use serde::{Deserialize, Serialize};
 
-use crate::credentials::TracelCredentials;
-use crate::error::{ApiErrorBody, ApiErrorCode, ClientError};
-use crate::session::authenticate;
+use crate::console::credentials::TracelCredentials;
+use crate::console::session::authenticate;
+use crate::console::user::response::UserResponseSchema;
+use crate::error::ClientError;
 use crate::transport::ApiTransport;
-use crate::user::response::UserResponseSchema;
-
-impl From<reqwest::Error> for ClientError {
-    fn from(error: reqwest::Error) -> Self {
-        match error.status() {
-            Some(status) => ClientError::ApiError {
-                status,
-                body: ApiErrorBody {
-                    code: ApiErrorCode::Unknown,
-                    message: error.to_string(),
-                },
-            },
-            None => ClientError::UnknownError(error.to_string()),
-        }
-    }
-}
 
 /// A client for making HTTP requests to the Tracel API.
 ///

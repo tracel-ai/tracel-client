@@ -3,6 +3,7 @@ pub mod dataset;
 pub mod experiment;
 pub mod model;
 pub mod system;
+pub mod upload;
 
 use reqwest::Url;
 

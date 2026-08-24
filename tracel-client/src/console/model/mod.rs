@@ -2,12 +2,15 @@ pub mod request;
 pub mod response;
 
 use crate::{
-    Client, ClientError,
-    model::{
+    ClientError,
+    console::Client,
+    console::model::{
         request::{CreateModelRequest, RequestModelVersionUploadRequest},
-        response::{ModelDownloadResponse, ModelResponse, ModelVersionResponse},
+        response::{
+            ModelDownloadResponse, ModelResponse, ModelVersionResponse,
+            RequestModelVersionUploadResponse,
+        },
     },
-    response::RequestModelVersionUploadResponse,
 };
 
 impl Client {

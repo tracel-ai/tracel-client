@@ -1,6 +1,9 @@
 pub mod request;
 
-use crate::{Client, ClientError, job::request::ComputeProviderQueueJobRequest};
+use crate::{
+    ClientError,
+    console::{Client, job::request::ComputeProviderQueueJobRequest},
+};
 
 impl Client {
     pub fn start_remote_job(

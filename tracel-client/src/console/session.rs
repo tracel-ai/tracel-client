@@ -5,7 +5,7 @@
 use reqwest::header::SET_COOKIE;
 use serde::Serialize;
 
-use crate::credentials::TracelCredentials;
+use crate::console::credentials::TracelCredentials;
 use crate::error::ClientError;
 use crate::transport::{ApiTransport, Auth, ResponseExt};
 

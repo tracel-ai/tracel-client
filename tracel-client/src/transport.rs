@@ -3,26 +3,23 @@ use reqwest::header::COOKIE;
 
 use crate::error::{ApiErrorBody, ApiErrorCode, ClientError};
 
-/// Name of the session cookie the Tracel API issues.
-const SESSION_COOKIE_NAME: &str = "id";
-
+// Which variants are live depends on the enabled features, so the transport
+// itself carries them all rather than gating on them.
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub enum Auth {
     None,
     SessionCookie(String),
-    // Constructed only by the station's fleet client; the match arms stay
-    // unconditional so the transport is feature-free.
-    #[cfg_attr(not(feature = "station"), allow(dead_code))]
-    Bearer(String),
 }
 
+#[allow(dead_code)]
 impl Auth {
-    /// Session cookie auth for a raw session token.
-    ///
+    const SESSION_COOKIE_NAME: &'static str = "id";
+
     /// The device flow returns the bare session id, not a `Set-Cookie` header,
     /// so the cookie has to be built here.
     pub fn session_token(token: &str) -> Self {
-        Auth::SessionCookie(format!("{SESSION_COOKIE_NAME}={token}"))
+        Auth::SessionCookie(format!("{}={token}", Self::SESSION_COOKIE_NAME))
     }
 }
 
@@ -78,7 +75,6 @@ impl ApiTransport {
         match &self.auth {
             Auth::None => request,
             Auth::SessionCookie(cookie) => request.header(COOKIE, cookie),
-            Auth::Bearer(token) => request.bearer_auth(token),
         }
     }
 

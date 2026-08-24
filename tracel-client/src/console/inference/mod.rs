@@ -3,9 +3,9 @@
 pub mod request;
 pub mod response;
 
-use crate::inference::request::{CreateInferenceGroupRequest, IngestTelemetryRequest};
-use crate::inference::response::InferenceGroupResponse;
-use crate::{Client, ClientError};
+use crate::console::inference::request::{CreateInferenceGroupRequest, IngestTelemetryRequest};
+use crate::console::inference::response::InferenceGroupResponse;
+use crate::{ClientError, console::Client};
 
 impl Client {
     /// Create a new inference group in the given project.

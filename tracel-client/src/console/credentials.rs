@@ -3,8 +3,8 @@ use std::str::FromStr;
 
 /// Credentials to connect to the Tracel server.
 ///
-/// Either kind authorizes a [`Client`](crate::Client) through
-/// [`Client::connect`](crate::Client::connect).
+/// Either kind authorizes a [`Client`](crate::console::Client) through
+/// [`Client::connect`](crate::console::Client::connect).
 #[derive(Clone, PartialEq, Eq)]
 pub enum TracelCredentials {
     /// A long-lived API key, created from the Tracel console.
@@ -54,7 +54,7 @@ impl From<SessionToken> for TracelCredentials {
 
 /// An opaque Tracel session token.
 ///
-/// Issued by [`DeviceAuthClient`](crate::auth::DeviceAuthClient). Expires after
+/// Issued by [`DeviceAuthClient`](crate::console::auth::DeviceAuthClient). Expires after
 /// a day of inactivity.
 #[derive(Clone, PartialEq, Eq)]
 pub struct SessionToken(String);

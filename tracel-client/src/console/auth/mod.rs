@@ -6,7 +6,7 @@
 //! # Examples
 //!
 //! ```no_run
-//! use tracel_client::{Client, Env, TracelCredentials, auth::DeviceAuthClient};
+//! use tracel_client::console::{Client, Env, TracelCredentials, auth::DeviceAuthClient};
 //!
 //! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! let device_auth = DeviceAuthClient::new(Env::Production, "tracel-cli");
@@ -30,8 +30,8 @@ use std::time::{Duration, Instant};
 
 use reqwest::Url;
 
-use crate::client::Env;
-use crate::credentials::SessionToken;
+use crate::console::client::Env;
+use crate::console::credentials::SessionToken;
 use crate::error::{ApiErrorBody, ApiErrorCode, ClientError};
 use crate::transport::{ApiTransport, ResponseExt};
 

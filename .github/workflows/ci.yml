@@ -35,6 +35,12 @@ jobs:
       - name: Lint
         run: cargo xtask check lint
       # --------------------------------------------------------------------------------
+      - name: Lint (station only)
+        run: cargo xtask check --target crates --only tracel-client --no-default-features --features station lint
+      # --------------------------------------------------------------------------------
+      - name: Lint (console and station)
+        run: cargo xtask check --target crates --only tracel-client --no-default-features --features console,station lint
+      # --------------------------------------------------------------------------------
       - name: Typos
         uses: tracel-ai/github-actions/check-typos@v11
       # --------------------------------------------------------------------------------

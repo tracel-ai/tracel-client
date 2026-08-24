@@ -10,8 +10,8 @@ license.workspace = true
 readme.workspace = true
 
 [features]
-default = ["tracel", "station"]
-tracel = []
+default = ["console"]
+console = []
 station = []
 
 [dependencies]

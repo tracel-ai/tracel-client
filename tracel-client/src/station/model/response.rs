@@ -1,5 +1,7 @@
 use serde::Deserialize;
 
+pub use crate::station::upload::PresignedUploadUrlResponse;
+
 #[derive(Debug, Clone, Deserialize)]
 pub struct ModelResponse {
     pub id: String,
@@ -73,11 +75,4 @@ pub struct UploadModelResponse {
 pub struct PresignedModelFileUploadUrlsResponse {
     pub rel_path: String,
     pub parts: Vec<PresignedUploadUrlResponse>,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct PresignedUploadUrlResponse {
-    pub part: u32,
-    pub url: String,
-    pub size_bytes: u64,
 }
