@@ -186,8 +186,7 @@ impl ApiTransport {
     /// Download from an absolute (presigned) URL via GET, streaming into
     /// `writer`.
     ///
-    /// The same rules as [`Self::upload_bytes_to_url`] apply: the URL is not
-    /// joined with `base_url` and no auth is attached. `progress` receives the
+    /// The URL is not joined with `base_url` and no auth is attached. `progress` receives the
     /// cumulative byte count as chunks arrive. Returns the total bytes written.
     pub fn download_url_to_writer(
         &self,
