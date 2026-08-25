@@ -183,6 +183,44 @@ impl ApiTransport {
         Ok(())
     }
 
+    /// Download from an absolute (presigned) URL via GET, streaming into
+    /// `writer`.
+    ///
+    /// The same rules as [`Self::upload_bytes_to_url`] apply: the URL is not
+    /// joined with `base_url` and no auth is attached. `progress` receives the
+    /// cumulative byte count as chunks arrive. Returns the total bytes written.
+    pub fn download_url_to_writer(
+        &self,
+        url: &str,
+        writer: &mut dyn std::io::Write,
+        progress: &mut dyn FnMut(u64),
+    ) -> Result<u64, ClientError> {
+        use std::io::Read;
+
+        let client = reqwest::blocking::Client::builder()
+            .timeout(None)
+            .tcp_keepalive(std::time::Duration::from_secs(60))
+            .build()?;
+        let mut response = client.get(url).send()?.map_to_tracel_err()?;
+
+        let mut buffer = [0u8; 64 * 1024];
+        let mut written = 0u64;
+        loop {
+            let read = response
+                .read(&mut buffer)
+                .map_err(|err| ClientError::UnknownError(err.to_string()))?;
+            if read == 0 {
+                break;
+            }
+            writer
+                .write_all(&buffer[..read])
+                .map_err(|err| ClientError::UnknownError(err.to_string()))?;
+            written += read as u64;
+            progress(written);
+        }
+        Ok(written)
+    }
+
     pub fn join(&self, path: &str) -> Url {
         self.join_versioned(path, 1)
     }
