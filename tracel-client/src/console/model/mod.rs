@@ -7,7 +7,7 @@ use crate::{
     console::model::{
         request::{CreateModelRequest, RequestModelVersionUploadRequest},
         response::{
-            ModelDownloadResponse, ModelResponse, ModelVersionResponse,
+            ModelDownloadResponse, ModelListResponse, ModelResponse, ModelVersionResponse,
             RequestModelVersionUploadResponse,
         },
     },
@@ -27,6 +27,18 @@ impl Client {
             format!("projects/{namespace}/{project_name}/models"),
             Some(req),
         )
+    }
+
+    /// List the models of a project.
+    ///
+    /// The client must be logged in before calling this method.
+    pub fn list_models(
+        &self,
+        namespace: &str,
+        project_name: &str,
+    ) -> Result<ModelListResponse, ClientError> {
+        self.transport
+            .get_json(format!("projects/{namespace}/{project_name}/models"))
     }
 
     /// Get details about a specific model.
