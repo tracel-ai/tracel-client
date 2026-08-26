@@ -97,17 +97,4 @@ impl Client {
     pub fn upload_bytes_to_url(&self, url: &str, bytes: Vec<u8>) -> Result<(), ClientError> {
         self.transport.upload_bytes_to_url(url, bytes)
     }
-
-    /// Download from an absolute presigned URL (GET), streaming into `writer`.
-    ///
-    /// `progress` receives the cumulative byte count as chunks arrive.
-    /// Returns the total bytes written.
-    pub fn download_url_to_writer(
-        &self,
-        url: &str,
-        writer: &mut dyn std::io::Write,
-        progress: &mut dyn FnMut(u64),
-    ) -> Result<u64, ClientError> {
-        self.transport.download_url_to_writer(url, writer, progress)
-    }
 }
