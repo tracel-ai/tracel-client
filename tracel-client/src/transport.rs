@@ -182,6 +182,7 @@ impl ApiTransport {
         client.put(url).body(bytes).send()?.map_to_tracel_err()?;
         Ok(())
     }
+
     pub fn join(&self, path: &str) -> Url {
         self.join_versioned(path, 1)
     }
