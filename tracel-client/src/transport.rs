@@ -39,7 +39,7 @@ impl ApiTransport {
             .expect("failed to build HTTP client");
         Self {
             http_client,
-            base_url,
+            base_url: with_trailing_slash(base_url),
             auth: Auth::None,
         }
     }
@@ -194,6 +194,14 @@ impl ApiTransport {
             .join(path)
             .expect("Should be able to join url")
     }
+}
+
+fn with_trailing_slash(mut base_url: Url) -> Url {
+    if !base_url.path().ends_with('/') {
+        let path = format!("{}/", base_url.path());
+        base_url.set_path(&path);
+    }
+    base_url
 }
 
 pub(crate) trait ResponseExt {

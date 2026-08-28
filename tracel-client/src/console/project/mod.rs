@@ -6,7 +6,7 @@ use crate::{
     console::Client,
     console::project::{
         request::{CreateProjectRequest, PublishProjectVersionRequest, Visibility},
-        response::{CodeUploadUrlsResponse, ProjectResponse},
+        response::{CodeUploadUrlsResponse, ProjectListResponse, ProjectResponse},
     },
 };
 
@@ -48,6 +48,27 @@ impl Client {
     ) -> Result<ProjectResponse, ClientError> {
         self.transport
             .get_json(format!("projects/{owner_name}/{project_name}"))
+    }
+
+    /// List the projects owned by a user namespace.
+    ///
+    /// Only the projects the caller is allowed to see are returned. Fails when the namespace
+    /// does not exist.
+    pub fn list_user_projects(&self, owner_name: &str) -> Result<ProjectListResponse, ClientError> {
+        self.transport
+            .get_json(format!("users/{owner_name}/projects"))
+    }
+
+    /// List the projects owned by an organization namespace.
+    ///
+    /// Only the projects the caller is allowed to see are returned. Fails when the namespace
+    /// does not exist.
+    pub fn list_organization_projects(
+        &self,
+        owner_name: &str,
+    ) -> Result<ProjectListResponse, ClientError> {
+        self.transport
+            .get_json(format!("organizations/{owner_name}/projects"))
     }
 
     pub fn create_organization_project(

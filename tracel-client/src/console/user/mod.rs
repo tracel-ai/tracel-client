@@ -9,15 +9,13 @@ use crate::{
 impl Client {
     /// Fetches the authenticated user.
     ///
+    /// Returns `Ok(None)` when the session is missing or expired because the server reports that
+    /// state as a successful response with a `null` body.
+    ///
     /// [`Client::user`] returns the copy taken on connect, without a request.
-    pub fn get_current_user(&self) -> Result<UserResponseSchema, ClientError> {
+    pub fn get_current_user(&self) -> Result<Option<UserResponseSchema>, ClientError> {
         let url = self.transport.join("user");
-
-        // The endpoint answers 200 with a `null` body rather than 401 when the
-        // session is missing or expired.
-        self.transport
-            .get_json::<Option<UserResponseSchema>>(url)?
-            .ok_or(ClientError::Unauthorized)
+        self.transport.get_json(url)
     }
 
     pub fn get_user_organizations(&self) -> Result<GetUserOrganizationsResponse, ClientError> {

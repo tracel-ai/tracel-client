@@ -92,6 +92,11 @@ impl Client {
         self.transport.base_url()
     }
 
+    /// The base URL every request is resolved against.
+    pub fn base_url(&self) -> &Url {
+        self.transport.base_url()
+    }
+
     pub fn get_env(&self) -> &Env {
         &self.env
     }
