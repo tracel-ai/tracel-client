@@ -11,7 +11,6 @@ pub struct ProjectResponse {
     pub namespace_type: String,
     pub description: String,
     pub created_by: String,
-    #[serde(default)]
     pub visibility: Visibility,
 }
 
