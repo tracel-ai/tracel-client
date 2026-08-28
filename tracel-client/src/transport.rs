@@ -196,8 +196,6 @@ impl ApiTransport {
     }
 }
 
-/// Joining resolves against the last path segment, which would drop a base URL's own path
-/// prefix (`https://console.tracel.ai/api`) unless it ends with a separator.
 fn with_trailing_slash(mut base_url: Url) -> Url {
     if !base_url.path().ends_with('/') {
         let path = format!("{}/", base_url.path());

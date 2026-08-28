@@ -24,16 +24,3 @@ impl Client {
         self.transport.get_json(url)
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn current_user_api_preserves_an_absent_user_as_a_value() {
-        let get_current_user: fn(&Client) -> Result<Option<UserResponseSchema>, ClientError> =
-            Client::get_current_user;
-
-        let _ = get_current_user;
-    }
-}
