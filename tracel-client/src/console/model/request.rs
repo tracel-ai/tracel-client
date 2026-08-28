@@ -16,4 +16,6 @@ pub struct ModelFileSpecRequest {
 #[derive(Serialize, Clone, Debug)]
 pub struct RequestModelVersionUploadRequest {
     pub files: Vec<ModelFileSpecRequest>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub metadata: Option<serde_json::Value>,
 }

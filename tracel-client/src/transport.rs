@@ -39,7 +39,7 @@ impl ApiTransport {
             .expect("failed to build HTTP client");
         Self {
             http_client,
-            base_url,
+            base_url: with_trailing_slash(base_url),
             auth: Auth::None,
         }
     }
@@ -194,6 +194,16 @@ impl ApiTransport {
             .join(path)
             .expect("Should be able to join url")
     }
+}
+
+/// Joining resolves against the last path segment, which would drop a base URL's own path
+/// prefix (`https://console.tracel.ai/api`) unless it ends with a separator.
+fn with_trailing_slash(mut base_url: Url) -> Url {
+    if !base_url.path().ends_with('/') {
+        let path = format!("{}/", base_url.path());
+        base_url.set_path(&path);
+    }
+    base_url
 }
 
 pub(crate) trait ResponseExt {

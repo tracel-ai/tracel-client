@@ -49,6 +49,12 @@ pub struct ModelListResponse {
 }
 
 #[derive(Deserialize, Clone, Debug)]
+pub struct ModelVersionListResponse {
+    pub items: Vec<ModelVersionResponse>,
+    pub total: usize,
+}
+
+#[derive(Deserialize, Clone, Debug)]
 pub struct ModelDownloadResponse {
     pub files: Vec<PresignedModelFileUrlResponse>,
 }
