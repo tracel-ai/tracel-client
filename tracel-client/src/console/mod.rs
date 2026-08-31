@@ -2,6 +2,7 @@ pub mod artifact;
 pub mod auth;
 pub mod client;
 pub mod credentials;
+pub mod dataset;
 pub mod experiment;
 pub mod inference;
 pub mod job;
