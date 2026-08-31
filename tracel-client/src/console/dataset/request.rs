@@ -22,7 +22,7 @@ pub struct QueryDatasetVersionsRequest {
 #[serde_with::serde_as]
 #[derive(Debug, Serialize, Clone)]
 pub struct DatasetVersionUploadItemRequest {
-    pub source_item_id: String,
+    pub source_item_id: Option<String>,
     #[serde_as(as = "serde_with::base64::Base64")]
     pub example_payload: Vec<u8>,
     pub annotation: Option<serde_json::Value>,

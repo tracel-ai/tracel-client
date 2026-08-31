@@ -60,3 +60,16 @@ pub struct DatasetVersionUploadItemOutcomeResponse {
 pub struct AddDatasetVersionUploadItemsResponse {
     pub outcomes: Vec<DatasetVersionUploadItemOutcomeResponse>,
 }
+
+#[serde_with::serde_as]
+#[derive(Deserialize, Clone, Debug)]
+pub struct DatasetVersionItemResponse {
+    pub entry_idx: u64,
+    #[serde_as(as = "serde_with::base64::Base64")]
+    pub payload: Vec<u8>,
+}
+
+#[derive(Deserialize, Clone, Debug)]
+pub struct DatasetVersionItemsPageResponse {
+    pub items: Vec<DatasetVersionItemResponse>,
+}

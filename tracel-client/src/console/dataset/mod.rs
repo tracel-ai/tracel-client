@@ -11,7 +11,7 @@ use crate::{
         },
         response::{
             AddDatasetVersionUploadItemsResponse, DatasetListResponse, DatasetResponse,
-            DatasetVersionListResponse, DatasetVersionResponse,
+            DatasetVersionItemsPageResponse, DatasetVersionListResponse, DatasetVersionResponse,
             StartedDatasetVersionUploadResponse,
         },
     },
@@ -147,5 +147,38 @@ impl Client {
             ),
             None::<()>,
         )
+    }
+
+    /// Streams a page of items from a dataset version.
+    ///
+    /// `index` is where to start, not how many have been seen: resume from the last `entry_idx`
+    /// received plus one, since the indices a version holds need not be contiguous.
+    ///
+    /// The client must be logged in before calling this method.
+    pub fn stream_dataset_version_items(
+        &self,
+        namespace: &str,
+        project_name: &str,
+        dataset_name: &str,
+        version: u32,
+        index: Option<u64>,
+        limit: Option<u32>,
+    ) -> Result<DatasetVersionItemsPageResponse, ClientError> {
+        let mut query = Vec::new();
+        if let Some(index) = index {
+            query.push(format!("index={index}"));
+        }
+        if let Some(limit) = limit {
+            query.push(format!("limit={limit}"));
+        }
+        let query = if query.is_empty() {
+            String::new()
+        } else {
+            format!("?{}", query.join("&"))
+        };
+
+        self.transport.get_json(format!(
+            "projects/{namespace}/{project_name}/datasets/{dataset_name}/versions/{version}/items{query}"
+        ))
     }
 }
