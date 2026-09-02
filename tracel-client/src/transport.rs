@@ -5,32 +5,21 @@ use reqwest::header::COOKIE;
 
 use crate::error::{ApiErrorBody, ApiErrorCode, ClientError};
 
-/// What an API call is given. These carry JSON in and JSON out, so a request
-/// still running after this is a server that is not going to answer.
 const API_CALL_TIMEOUT: Duration = Duration::from_secs(60);
 
-/// Deliberately generous: a total timeout cannot tell a slow upload from a
-/// stalled one, and [`CONNECT_TIMEOUT`] plus TCP keepalive already catch a host
-/// that is not there. Tightened towards real bandwidth it would start failing
-/// uploads that would have succeeded, which is what it exists to prevent.
 const UPLOAD_SECONDS_ALLOWED_PER_MEGABYTE: u64 = 10;
 
-/// What even a small upload is given, so that connecting, the TLS handshake and
-/// the server's own acknowledgement are never what runs out the clock.
-const SHORTEST_UPLOAD_TIMEOUT: Duration = Duration::from_secs(60);
+const MIN_UPLOAD_TIMEOUT: Duration = Duration::from_secs(60);
 
-/// An unreachable server fails here in seconds rather than sitting out the whole
-/// transfer allowance.
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
 
-const BYTES_PER_MEGABYTE: u64 = 1024 * 1024;
-
 fn timeout_worth_allowing_an_upload_of(size_bytes: u64) -> Duration {
+    const BYTES_PER_MEGABYTE: u64 = 1024 * 1024;
     let megabytes = size_bytes.div_ceil(BYTES_PER_MEGABYTE);
     let allowed =
         Duration::from_secs(megabytes.saturating_mul(UPLOAD_SECONDS_ALLOWED_PER_MEGABYTE));
 
-    allowed.max(SHORTEST_UPLOAD_TIMEOUT)
+    allowed.max(MIN_UPLOAD_TIMEOUT)
 }
 
 // Which variants are live depends on the enabled features, so the transport
@@ -71,7 +60,7 @@ impl ApiTransport {
         let upload_client = reqwest::blocking::Client::builder()
             .timeout(None)
             .connect_timeout(CONNECT_TIMEOUT)
-            .tcp_keepalive(SHORTEST_UPLOAD_TIMEOUT)
+            .tcp_keepalive(MIN_UPLOAD_TIMEOUT)
             .build()
             .expect("failed to build HTTP upload client");
         Self {
