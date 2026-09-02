@@ -55,10 +55,6 @@ impl Auth {
 #[derive(Debug, Clone)]
 pub struct ApiTransport {
     http_client: reqwest::blocking::Client,
-    /// Kept apart from `http_client` because an upload's timeout is set per
-    /// request from its size, and a client-wide one would cap it. Built once
-    /// rather than per upload so that a multi-part transfer reuses the
-    /// connection and its TLS session instead of handshaking for every part.
     upload_client: reqwest::blocking::Client,
     base_url: Url,
     auth: Auth,
