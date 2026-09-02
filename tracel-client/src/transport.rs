@@ -5,11 +5,11 @@ use reqwest::header::COOKIE;
 
 use crate::error::{ApiErrorBody, ApiErrorCode, ClientError};
 
-const API_CALL_TIMEOUT: Duration = Duration::from_secs(60);
+const API_CALL_TIMEOUT: Duration = Duration::from_secs(120);
 
 const UPLOAD_SECONDS_ALLOWED_PER_MEGABYTE: u64 = 10;
 
-const MIN_UPLOAD_TIMEOUT: Duration = Duration::from_secs(60);
+const MIN_UPLOAD_TIMEOUT: Duration = Duration::from_secs(120);
 
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
 
