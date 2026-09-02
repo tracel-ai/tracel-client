@@ -1,7 +1,36 @@
+use std::time::Duration;
+
 use reqwest::Url;
 use reqwest::header::COOKIE;
 
 use crate::error::{ApiErrorBody, ApiErrorCode, ClientError};
+
+/// What an API call is given. These carry JSON in and JSON out, so a request
+/// still running after this is a server that is not going to answer.
+const API_CALL_TIMEOUT: Duration = Duration::from_secs(60);
+
+/// What an upload is given for every megabyte it carries.
+///
+/// An upload is one request whose duration is set by the sender's bandwidth, so
+/// no single fixed timeout serves it: short enough for a small file and it kills
+/// a large one on a slow link, long enough for a large file and a stalled small
+/// one hangs. This scales the allowance with what is actually being sent, at a
+/// rate a link far slower than any office connection still meets.
+const UPLOAD_SECONDS_ALLOWED_PER_MEGABYTE: u64 = 2;
+
+/// What even a small upload is given, so that connecting, the TLS handshake and
+/// the server's own acknowledgement are never what runs out the clock.
+const SHORTEST_UPLOAD_TIMEOUT: Duration = Duration::from_secs(60);
+
+const BYTES_PER_MEGABYTE: u64 = 1024 * 1024;
+
+/// How long an upload of `size_bytes` is allowed to take.
+fn timeout_worth_allowing_an_upload_of(size_bytes: u64) -> Duration {
+    let megabytes = size_bytes.div_ceil(BYTES_PER_MEGABYTE);
+    let scaled = Duration::from_secs(megabytes.saturating_mul(UPLOAD_SECONDS_ALLOWED_PER_MEGABYTE));
+
+    scaled.max(SHORTEST_UPLOAD_TIMEOUT)
+}
 
 // Which variants are live depends on the enabled features, so the transport
 // itself carries them all rather than gating on them.
@@ -26,6 +55,11 @@ impl Auth {
 #[derive(Debug, Clone)]
 pub struct ApiTransport {
     http_client: reqwest::blocking::Client,
+    /// Kept apart from `http_client` because an upload's timeout is set per
+    /// request from its size, and a client-wide one would cap it. Built once
+    /// rather than per upload so that a multi-part transfer reuses the
+    /// connection and its TLS session instead of handshaking for every part.
+    upload_client: reqwest::blocking::Client,
     base_url: Url,
     auth: Auth,
 }
@@ -34,11 +68,17 @@ pub struct ApiTransport {
 impl ApiTransport {
     pub fn new(base_url: Url) -> Self {
         let http_client = reqwest::blocking::Client::builder()
-            .timeout(std::time::Duration::from_secs(60))
+            .timeout(API_CALL_TIMEOUT)
             .build()
             .expect("failed to build HTTP client");
+        let upload_client = reqwest::blocking::Client::builder()
+            .timeout(None)
+            .tcp_keepalive(SHORTEST_UPLOAD_TIMEOUT)
+            .build()
+            .expect("failed to build HTTP upload client");
         Self {
             http_client,
+            upload_client,
             base_url: with_trailing_slash(base_url),
             auth: Auth::None,
         }
@@ -174,12 +214,20 @@ impl ApiTransport {
     /// Unlike the other helpers this does NOT join the path with `base_url` and
     /// does NOT attach auth — presigned URLs (e.g. S3) are absolute and
     /// self-authenticating.
+    ///
+    /// The request is given [a timeout drawn from its own
+    /// size](timeout_worth_allowing_an_upload_of) rather than the one API calls
+    /// get, which no upload larger than a few megabytes would survive.
     pub fn upload_bytes_to_url(&self, url: &str, bytes: Vec<u8>) -> Result<(), ClientError> {
-        let client = reqwest::blocking::Client::builder()
-            .timeout(None)
-            .tcp_keepalive(std::time::Duration::from_secs(60))
-            .build()?;
-        client.put(url).body(bytes).send()?.map_to_tracel_err()?;
+        let timeout = timeout_worth_allowing_an_upload_of(bytes.len() as u64);
+
+        self.upload_client
+            .put(url)
+            .timeout(timeout)
+            .body(bytes)
+            .send()?
+            .map_to_tracel_err()?;
+
         Ok(())
     }
 
