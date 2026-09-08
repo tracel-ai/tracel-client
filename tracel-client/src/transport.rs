@@ -1,7 +1,26 @@
+use std::time::Duration;
+
 use reqwest::Url;
 use reqwest::header::COOKIE;
 
 use crate::error::{ApiErrorBody, ApiErrorCode, ClientError};
+
+const API_CALL_TIMEOUT: Duration = Duration::from_secs(120);
+
+const UPLOAD_SECONDS_ALLOWED_PER_MEGABYTE: u64 = 10;
+
+const MIN_UPLOAD_TIMEOUT: Duration = Duration::from_secs(120);
+
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
+
+fn timeout_worth_allowing_an_upload_of(size_bytes: u64) -> Duration {
+    const BYTES_PER_MEGABYTE: u64 = 1024 * 1024;
+    let megabytes = size_bytes.div_ceil(BYTES_PER_MEGABYTE);
+    let allowed =
+        Duration::from_secs(megabytes.saturating_mul(UPLOAD_SECONDS_ALLOWED_PER_MEGABYTE));
+
+    allowed.max(MIN_UPLOAD_TIMEOUT)
+}
 
 // Which variants are live depends on the enabled features, so the transport
 // itself carries them all rather than gating on them.
@@ -26,6 +45,7 @@ impl Auth {
 #[derive(Debug, Clone)]
 pub struct ApiTransport {
     http_client: reqwest::blocking::Client,
+    upload_client: reqwest::blocking::Client,
     base_url: Url,
     auth: Auth,
 }
@@ -34,11 +54,18 @@ pub struct ApiTransport {
 impl ApiTransport {
     pub fn new(base_url: Url) -> Self {
         let http_client = reqwest::blocking::Client::builder()
-            .timeout(std::time::Duration::from_secs(60))
+            .timeout(API_CALL_TIMEOUT)
             .build()
             .expect("failed to build HTTP client");
+        let upload_client = reqwest::blocking::Client::builder()
+            .timeout(None)
+            .connect_timeout(CONNECT_TIMEOUT)
+            .tcp_keepalive(MIN_UPLOAD_TIMEOUT)
+            .build()
+            .expect("failed to build HTTP upload client");
         Self {
             http_client,
+            upload_client,
             base_url: with_trailing_slash(base_url),
             auth: Auth::None,
         }
@@ -174,12 +201,20 @@ impl ApiTransport {
     /// Unlike the other helpers this does NOT join the path with `base_url` and
     /// does NOT attach auth — presigned URLs (e.g. S3) are absolute and
     /// self-authenticating.
+    ///
+    /// The request is given [a timeout drawn from its own
+    /// size](timeout_worth_allowing_an_upload_of) rather than the one API calls
+    /// get, which no upload larger than a few megabytes would survive.
     pub fn upload_bytes_to_url(&self, url: &str, bytes: Vec<u8>) -> Result<(), ClientError> {
-        let client = reqwest::blocking::Client::builder()
-            .timeout(None)
-            .tcp_keepalive(std::time::Duration::from_secs(60))
-            .build()?;
-        client.put(url).body(bytes).send()?.map_to_tracel_err()?;
+        let timeout = timeout_worth_allowing_an_upload_of(bytes.len() as u64);
+
+        self.upload_client
+            .put(url)
+            .timeout(timeout)
+            .body(bytes)
+            .send()?
+            .map_to_tracel_err()?;
+
         Ok(())
     }
 
