@@ -9,13 +9,13 @@ impl<'a> SystemClient<'a> {
         Self { transport }
     }
 
-    pub fn health(&self) -> Result<(), ClientError> {
+    pub async fn health(&self) -> Result<(), ClientError> {
         let url = self
             .transport
             .base_url()
             .join("health")
             .expect("Should be able to join health url");
 
-        self.transport.get(url)
+        self.transport.get(url).await
     }
 }

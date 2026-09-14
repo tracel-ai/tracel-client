@@ -42,10 +42,15 @@ impl Auth {
     }
 }
 
+/// HTTP transport shared by every endpoint.
+///
+/// Requests are resolved against the base URL, carry the session, and time out
+/// after [`API_CALL_TIMEOUT`]. Presigned uploads go through a separate client
+/// and draw their timeout from their size instead.
 #[derive(Debug, Clone)]
 pub struct ApiTransport {
-    http_client: reqwest::blocking::Client,
-    upload_client: reqwest::blocking::Client,
+    http_client: reqwest::Client,
+    upload_client: reqwest::Client,
     base_url: Url,
     auth: Auth,
 }
@@ -53,18 +58,13 @@ pub struct ApiTransport {
 #[allow(unused)]
 impl ApiTransport {
     pub fn new(base_url: Url) -> Self {
-        let http_client = reqwest::blocking::Client::builder()
-            .timeout(API_CALL_TIMEOUT)
-            .build()
-            .expect("failed to build HTTP client");
-        let upload_client = reqwest::blocking::Client::builder()
-            .timeout(None)
+        let upload_client = reqwest::Client::builder()
             .connect_timeout(CONNECT_TIMEOUT)
             .tcp_keepalive(MIN_UPLOAD_TIMEOUT)
             .build()
             .expect("failed to build HTTP upload client");
         Self {
-            http_client,
+            http_client: reqwest::Client::new(),
             upload_client,
             base_url: with_trailing_slash(base_url),
             auth: Auth::None,
@@ -92,11 +92,12 @@ impl ApiTransport {
         &self,
         method: reqwest::Method,
         path: impl AsRef<str>,
-    ) -> reqwest::blocking::RequestBuilder {
+    ) -> reqwest::RequestBuilder {
         let url = self.join(path.as_ref());
         let request = self
             .http_client
             .request(method, url)
+            .timeout(API_CALL_TIMEOUT)
             .header("X-SDK-Version", env!("CARGO_PKG_VERSION"));
 
         match &self.auth {
@@ -105,80 +106,101 @@ impl ApiTransport {
         }
     }
 
-    pub fn get_json<R>(&self, path: impl AsRef<str>) -> Result<R, ClientError>
+    pub async fn get_json<R>(&self, path: impl AsRef<str>) -> Result<R, ClientError>
     where
         R: for<'de> serde::Deserialize<'de>,
     {
-        let response = self.req(reqwest::Method::GET, path, None::<serde_json::Value>)?;
-        let bytes = response.bytes()?;
+        let response = self
+            .req(reqwest::Method::GET, path, None::<serde_json::Value>)
+            .await?;
+        let bytes = response.bytes().await?;
         Ok(serde_json::from_slice::<R>(&bytes)?)
     }
 
-    pub fn get(&self, path: impl AsRef<str>) -> Result<(), ClientError> {
+    pub async fn get(&self, path: impl AsRef<str>) -> Result<(), ClientError> {
         self.req(reqwest::Method::GET, path, None::<serde_json::Value>)
+            .await
             .map(|_| ())
     }
 
-    pub fn get_optional_json<R>(&self, path: impl AsRef<str>) -> Result<Option<R>, ClientError>
+    pub async fn get_optional_json<R>(
+        &self,
+        path: impl AsRef<str>,
+    ) -> Result<Option<R>, ClientError>
     where
         R: for<'de> serde::Deserialize<'de>,
     {
-        let response = self.req(reqwest::Method::GET, path, None::<serde_json::Value>)?;
+        let response = self
+            .req(reqwest::Method::GET, path, None::<serde_json::Value>)
+            .await?;
         if response.status() == reqwest::StatusCode::NO_CONTENT {
             return Ok(None);
         }
 
-        let bytes = response.bytes()?;
+        let bytes = response.bytes().await?;
         Ok(Some(serde_json::from_slice::<R>(&bytes)?))
     }
 
-    pub fn post_json<T, R>(&self, path: impl AsRef<str>, body: Option<T>) -> Result<R, ClientError>
+    pub async fn post_json<T, R>(
+        &self,
+        path: impl AsRef<str>,
+        body: Option<T>,
+    ) -> Result<R, ClientError>
     where
         T: serde::Serialize,
         R: for<'de> serde::Deserialize<'de>,
     {
-        let response = self.req(reqwest::Method::POST, path, body)?;
-        let bytes = response.bytes()?;
+        let response = self.req(reqwest::Method::POST, path, body).await?;
+        let bytes = response.bytes().await?;
         Ok(serde_json::from_slice::<R>(&bytes)?)
     }
 
-    pub fn post<T>(&self, path: impl AsRef<str>, body: Option<T>) -> Result<(), ClientError>
+    pub async fn post<T>(&self, path: impl AsRef<str>, body: Option<T>) -> Result<(), ClientError>
     where
         T: serde::Serialize,
     {
-        self.req(reqwest::Method::POST, path, body).map(|_| ())
-    }
-
-    pub fn patch_json<T, R>(&self, path: impl AsRef<str>, body: Option<T>) -> Result<R, ClientError>
-    where
-        T: serde::Serialize,
-        R: for<'de> serde::Deserialize<'de>,
-    {
-        let response = self.req(reqwest::Method::PATCH, path, body)?;
-        let bytes = response.bytes()?;
-        Ok(serde_json::from_slice::<R>(&bytes)?)
-    }
-
-    pub fn delete(&self, path: impl AsRef<str>) -> Result<(), ClientError> {
-        self.req(reqwest::Method::DELETE, path, None::<serde_json::Value>)
+        self.req(reqwest::Method::POST, path, body)
+            .await
             .map(|_| ())
     }
 
-    pub fn delete_json<R>(&self, path: impl AsRef<str>) -> Result<R, ClientError>
+    pub async fn patch_json<T, R>(
+        &self,
+        path: impl AsRef<str>,
+        body: Option<T>,
+    ) -> Result<R, ClientError>
     where
+        T: serde::Serialize,
         R: for<'de> serde::Deserialize<'de>,
     {
-        let response = self.req(reqwest::Method::DELETE, path, None::<serde_json::Value>)?;
-        let bytes = response.bytes()?;
+        let response = self.req(reqwest::Method::PATCH, path, body).await?;
+        let bytes = response.bytes().await?;
         Ok(serde_json::from_slice::<R>(&bytes)?)
     }
 
-    pub fn req<T: serde::Serialize>(
+    pub async fn delete(&self, path: impl AsRef<str>) -> Result<(), ClientError> {
+        self.req(reqwest::Method::DELETE, path, None::<serde_json::Value>)
+            .await
+            .map(|_| ())
+    }
+
+    pub async fn delete_json<R>(&self, path: impl AsRef<str>) -> Result<R, ClientError>
+    where
+        R: for<'de> serde::Deserialize<'de>,
+    {
+        let response = self
+            .req(reqwest::Method::DELETE, path, None::<serde_json::Value>)
+            .await?;
+        let bytes = response.bytes().await?;
+        Ok(serde_json::from_slice::<R>(&bytes)?)
+    }
+
+    pub async fn req<T: serde::Serialize>(
         &self,
         method: reqwest::Method,
         path: impl AsRef<str>,
         body: Option<T>,
-    ) -> Result<reqwest::blocking::Response, ClientError> {
+    ) -> Result<reqwest::Response, ClientError> {
         let request = self.request(method, path);
 
         let request = if let Some(body) = body {
@@ -190,13 +212,13 @@ impl ApiTransport {
         };
 
         tracing::debug!("Sending request to Burn API: {:?}", request);
-        let response = request.send()?.map_to_tracel_err()?;
+        let response = request.send().await?.map_to_tracel_err().await?;
         tracing::debug!("Received response from Burn API: {:?}", response);
 
         Ok(response)
     }
 
-    /// Upload raw bytes to an absolute (presigned) URL via PUT.
+    /// Uploads raw bytes to an absolute (presigned) URL via PUT.
     ///
     /// Unlike the other helpers this does NOT join the path with `base_url` and
     /// does NOT attach auth — presigned URLs (e.g. S3) are absolute and
@@ -204,16 +226,21 @@ impl ApiTransport {
     ///
     /// The request is given [a timeout drawn from its own
     /// size](timeout_worth_allowing_an_upload_of) rather than the one API calls
-    /// get, which no upload larger than a few megabytes would survive.
-    pub fn upload_bytes_to_url(&self, url: &str, bytes: Vec<u8>) -> Result<(), ClientError> {
+    /// get, which no upload larger than a few megabytes would survive. Its
+    /// length is declared up front, since a presigned PUT rejects chunked
+    /// transfer encoding.
+    pub async fn upload_bytes_to_url(&self, url: &str, bytes: Vec<u8>) -> Result<(), ClientError> {
         let timeout = timeout_worth_allowing_an_upload_of(bytes.len() as u64);
 
         self.upload_client
             .put(url)
             .timeout(timeout)
+            .header(reqwest::header::CONTENT_LENGTH, bytes.len())
             .body(bytes)
-            .send()?
-            .map_to_tracel_err()?;
+            .send()
+            .await?
+            .map_to_tracel_err()
+            .await?;
 
         Ok(())
     }
@@ -239,44 +266,65 @@ fn with_trailing_slash(mut base_url: Url) -> Url {
     base_url
 }
 
-pub(crate) trait ResponseExt {
-    fn map_to_tracel_err(self) -> Result<reqwest::blocking::Response, ClientError>;
+pub trait ResponseExt {
+    /// Passes a successful response through and turns any other status into
+    /// the [`ClientError`] it stands for, reading the body where it carries
+    /// the error code.
+    async fn map_to_tracel_err(self) -> Result<reqwest::Response, ClientError>;
 }
 
-impl ResponseExt for reqwest::blocking::Response {
-    fn map_to_tracel_err(self) -> Result<reqwest::blocking::Response, ClientError> {
+impl ResponseExt for reqwest::Response {
+    async fn map_to_tracel_err(self) -> Result<reqwest::Response, ClientError> {
         if self.status().is_success() {
-            Ok(self)
-        } else {
-            match self.status() {
-                reqwest::StatusCode::NOT_FOUND => {
-                    let code = self
-                        .text()
-                        .ok()
-                        .and_then(|text| text.parse::<serde_json::Value>().ok())
-                        .and_then(|value| serde_json::from_value::<ApiErrorBody>(value).ok())
-                        .map(|body| body.code);
-
-                    match code {
-                        Some(code) => Err(ClientError::NotFoundWithCode(code)),
-                        None => Err(ClientError::NotFound),
-                    }
-                }
-                reqwest::StatusCode::UNAUTHORIZED => Err(ClientError::Unauthorized),
-                reqwest::StatusCode::INTERNAL_SERVER_ERROR => Err(ClientError::InternalServerError),
-                _ => Err(ClientError::ApiError {
-                    status: self.status(),
-                    body: self
-                        .text()
-                        .map_err(|e| ClientError::UnknownError(e.to_string()))?
-                        .parse::<serde_json::Value>()
-                        .and_then(serde_json::from_value::<ApiErrorBody>)
-                        .unwrap_or_else(|e| ApiErrorBody {
-                            code: ApiErrorCode::Unknown,
-                            message: e.to_string(),
-                        }),
-                }),
-            }
+            return Ok(self);
         }
+
+        match self.status() {
+            reqwest::StatusCode::NOT_FOUND => {
+                let code = self
+                    .text()
+                    .await
+                    .ok()
+                    .and_then(|text| text.parse::<serde_json::Value>().ok())
+                    .and_then(|value| serde_json::from_value::<ApiErrorBody>(value).ok())
+                    .map(|body| body.code);
+
+                match code {
+                    Some(code) => Err(ClientError::NotFoundWithCode(code)),
+                    None => Err(ClientError::NotFound),
+                }
+            }
+            reqwest::StatusCode::UNAUTHORIZED => Err(ClientError::Unauthorized),
+            reqwest::StatusCode::INTERNAL_SERVER_ERROR => Err(ClientError::InternalServerError),
+            status => Err(ClientError::ApiError {
+                status,
+                body: self
+                    .text()
+                    .await
+                    .map_err(|e| ClientError::UnknownError(e.to_string()))?
+                    .parse::<serde_json::Value>()
+                    .and_then(serde_json::from_value::<ApiErrorBody>)
+                    .unwrap_or_else(|e| ApiErrorBody {
+                        code: ApiErrorCode::Unknown,
+                        message: e.to_string(),
+                    }),
+            }),
+        }
+    }
+}
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod tests {
+    use super::*;
+
+    fn assert_send(_: &impl Send) {}
+
+    #[test]
+    fn requests_are_send() {
+        let transport = ApiTransport::new(Url::parse("http://localhost").unwrap());
+
+        assert_send(&transport.get_json::<serde_json::Value>("user"));
+        assert_send(&transport.post::<()>("logout", None));
+        assert_send(&transport.upload_bytes_to_url("http://localhost", Vec::new()));
     }
 }

@@ -18,12 +18,12 @@ struct ApiKeyLoginRequest<'a> {
 /// Establishes an authenticated session on `transport`.
 ///
 /// Neither path proves the session is live; the caller does that.
-pub fn authenticate(
+pub async fn authenticate(
     transport: &ApiTransport,
     credentials: &TracelCredentials,
 ) -> Result<Auth, ClientError> {
     match credentials {
-        TracelCredentials::ApiKey(api_key) => exchange_api_key(transport, api_key),
+        TracelCredentials::ApiKey(api_key) => exchange_api_key(transport, api_key).await,
         TracelCredentials::SessionToken(session_token) => {
             Ok(Auth::session_token(session_token.as_str()))
         }
@@ -31,14 +31,14 @@ pub fn authenticate(
 }
 
 /// Trades an API key for the session the server opens for it.
-fn exchange_api_key(transport: &ApiTransport, api_key: &str) -> Result<Auth, ClientError> {
+async fn exchange_api_key(transport: &ApiTransport, api_key: &str) -> Result<Auth, ClientError> {
     let form = transport
         .request(reqwest::Method::POST, "login/api-key")
         .form(&ApiKeyLoginRequest { api_key });
 
     tracing::debug!("Requesting login form: {form:?}");
 
-    let response = form.send()?.map_to_tracel_err()?;
+    let response = form.send().await?.map_to_tracel_err().await?;
 
     // The transport sends this back verbatim as the `Cookie` request header.
     let cookie = response

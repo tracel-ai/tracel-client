@@ -6,7 +6,7 @@ use crate::{
 };
 
 impl Client {
-    pub fn start_remote_job(
+    pub async fn start_remote_job(
         &self,
         compute_provider_group_name: &str,
         owner_name: &str,
@@ -23,6 +23,6 @@ impl Client {
             command: command.to_string(),
         };
 
-        self.transport.post(url, Some(body))
+        self.transport.post(url, Some(body)).await
     }
 }

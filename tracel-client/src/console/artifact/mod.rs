@@ -20,7 +20,7 @@ impl Client {
     /// Creates an artifact entry on the Tracel server with the given files.
     ///
     /// The client must be logged in before calling this method.
-    pub fn create_artifact(
+    pub async fn create_artifact(
         &self,
         owner_name: &str,
         project_name: &str,
@@ -31,13 +31,13 @@ impl Client {
             "projects/{owner_name}/{project_name}/experiments/{exp_num}/artifacts"
         ));
 
-        self.transport.post_json(url, Some(req))
+        self.transport.post_json(url, Some(req)).await
     }
 
     /// Add files to an existing artifact.
     ///
     /// The client must be logged in before calling this method.
-    pub fn add_files_to_artifact(
+    pub async fn add_files_to_artifact(
         &self,
         owner_name: &str,
         project_name: &str,
@@ -51,6 +51,7 @@ impl Client {
 
         self.transport
             .post_json(url, Some(AddFilesToArtifactRequest { files }))
+            .await
     }
 
     /// Complete an artifact upload.
@@ -59,7 +60,7 @@ impl Client {
     ///
     /// If `file_names` is None, all files in the artifact will be marked as complete.
     /// If `file_names` is Some, only the specified files will be marked as complete.
-    pub fn complete_artifact_upload(
+    pub async fn complete_artifact_upload(
         &self,
         owner_name: &str,
         project_name: &str,
@@ -73,12 +74,13 @@ impl Client {
 
         self.transport
             .post(url, Some(CompleteUploadRequest { file_names }))
+            .await
     }
 
     /// List artifacts for the given experiment.
     ///
     /// The client must be logged in before calling this method.
-    pub fn list_artifacts(
+    pub async fn list_artifacts(
         &self,
         owner_name: &str,
         project_name: &str,
@@ -88,13 +90,13 @@ impl Client {
             "projects/{owner_name}/{project_name}/experiments/{exp_num}/artifacts"
         ));
 
-        self.transport.get_json(url)
+        self.transport.get_json(url).await
     }
 
     /// Query artifacts by name for the given experiment.
     ///
     /// The client must be logged in before calling this method.
-    pub fn list_artifacts_by_name(
+    pub async fn list_artifacts_by_name(
         &self,
         owner_name: &str,
         project_name: &str,
@@ -106,13 +108,13 @@ impl Client {
         ));
         url.query_pairs_mut().append_pair("name", name);
 
-        self.transport.get_json(url)
+        self.transport.get_json(url).await
     }
 
     /// Get details about a specific artifact by its ID.
     ///
     /// The client must be logged in before calling this method.
-    pub fn get_artifact(
+    pub async fn get_artifact(
         &self,
         owner_name: &str,
         project_name: &str,
@@ -123,13 +125,13 @@ impl Client {
             "projects/{owner_name}/{project_name}/experiments/{exp_num}/artifacts/{artifact_id}"
         ));
 
-        self.transport.get_json(url)
+        self.transport.get_json(url).await
     }
 
     /// Request presigned URLs to download an artifact's files from the Tracel server.
     ///
     /// The client must be logged in before calling this method.
-    pub fn presign_artifact_download(
+    pub async fn presign_artifact_download(
         &self,
         owner_name: &str,
         project_name: &str,
@@ -140,6 +142,6 @@ impl Client {
             "projects/{owner_name}/{project_name}/experiments/{exp_num}/artifacts/{artifact_id}/download"
         ));
 
-        self.transport.get_json(url)
+        self.transport.get_json(url).await
     }
 }

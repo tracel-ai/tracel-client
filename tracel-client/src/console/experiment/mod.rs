@@ -31,7 +31,7 @@ impl Client {
     /// Create a new experiment for the given project.
     ///
     /// The client must be logged in before calling this method.
-    pub fn create_experiment(
+    pub async fn create_experiment(
         &self,
         owner_name: &str,
         project_name: &str,
@@ -43,14 +43,17 @@ impl Client {
         let url = self.transport.join(path);
 
         // Create a new experiment
-        let experiment_response = self.transport.post_json(
-            url,
-            Some(CreateExperimentSchema {
-                name,
-                description,
-                attributes,
-            }),
-        )?;
+        let experiment_response = self
+            .transport
+            .post_json(
+                url,
+                Some(CreateExperimentSchema {
+                    name,
+                    description,
+                    attributes,
+                }),
+            )
+            .await?;
 
         Ok(experiment_response)
     }
@@ -75,7 +78,7 @@ impl Client {
     /// Cancel an experiment.
     ///
     /// The client must be logged in before calling this method.
-    pub fn cancel_experiment(
+    pub async fn cancel_experiment(
         &self,
         owner_name: &str,
         project_name: &str,
@@ -84,6 +87,6 @@ impl Client {
         let path = &format!("projects/{owner_name}/{project_name}/experiments/{exp_num}/cancel");
         let url = self.transport.join(path);
 
-        self.transport.post(url, None::<()>)
+        self.transport.post(url, None::<()>).await
     }
 }

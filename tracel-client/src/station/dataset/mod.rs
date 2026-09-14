@@ -23,15 +23,23 @@ impl<'a> DatasetClient<'a> {
         Self { transport }
     }
 
-    pub fn create(&self, request: CreateDatasetRequest) -> Result<DatasetResponse, ClientError> {
-        self.transport.post_json("datasets", Some(request))
+    pub async fn create(
+        &self,
+        request: CreateDatasetRequest,
+    ) -> Result<DatasetResponse, ClientError> {
+        self.transport.post_json("datasets", Some(request)).await
     }
 
-    pub fn query(&self, request: QueryDatasetsRequest) -> Result<DatasetListResponse, ClientError> {
-        self.transport.post_json("datasets/query", Some(request))
+    pub async fn query(
+        &self,
+        request: QueryDatasetsRequest,
+    ) -> Result<DatasetListResponse, ClientError> {
+        self.transport
+            .post_json("datasets/query", Some(request))
+            .await
     }
 
-    pub fn versions(
+    pub async fn versions(
         &self,
         dataset_name: &str,
         request: QueryDatasetVersionsRequest,
@@ -49,37 +57,41 @@ impl<'a> DatasetClient<'a> {
             }
         }
 
-        self.transport.get_json(url)
+        self.transport.get_json(url).await
     }
 
-    pub fn get_version(
+    pub async fn get_version(
         &self,
         dataset_name: &str,
         version: u32,
     ) -> Result<DatasetVersionResponse, ClientError> {
         self.transport
             .get_json(format!("datasets/{dataset_name}/versions/{version}"))
+            .await
     }
 
-    pub fn get_latest_version(
+    pub async fn get_latest_version(
         &self,
         dataset_name: &str,
     ) -> Result<DatasetVersionResponse, ClientError> {
         self.transport
             .get_json(format!("datasets/{dataset_name}/versions/latest"))
+            .await
     }
 
-    pub fn download(
+    pub async fn download(
         &self,
         dataset_name: &str,
         version: u32,
     ) -> Result<DatasetDownloadResponse, ClientError> {
-        self.transport.get_json(format!(
-            "datasets/{dataset_name}/versions/{version}/download"
-        ))
+        self.transport
+            .get_json(format!(
+                "datasets/{dataset_name}/versions/{version}/download"
+            ))
+            .await
     }
 
-    pub fn stream_items(
+    pub async fn stream_items(
         &self,
         dataset_name: &str,
         version: u32,
@@ -98,6 +110,6 @@ impl<'a> DatasetClient<'a> {
             }
         }
 
-        self.transport.get_json(url)
+        self.transport.get_json(url).await
     }
 }

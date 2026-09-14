@@ -27,19 +27,23 @@ impl<'a> ExperimentClient<'a> {
         Self { transport }
     }
 
-    pub fn create(
+    pub async fn create(
         &self,
         request: CreateExperimentRequest,
     ) -> Result<ExperimentResponse, ClientError> {
-        self.transport.post_json("experiments", Some(request))
+        self.transport.post_json("experiments", Some(request)).await
     }
 
-    pub fn get(&self, experiment_num: i32) -> Result<ExperimentResponse, ClientError> {
+    pub async fn get(&self, experiment_num: i32) -> Result<ExperimentResponse, ClientError> {
         self.transport
             .get_json(format!("experiments/{experiment_num}"))
+            .await
     }
 
-    pub fn list(&self, query: ListExperimentsQuery) -> Result<ExperimentListResponse, ClientError> {
+    pub async fn list(
+        &self,
+        query: ListExperimentsQuery,
+    ) -> Result<ExperimentListResponse, ClientError> {
         let mut url = self.transport.join("experiments");
         {
             let mut pairs = url.query_pairs_mut();
@@ -51,22 +55,23 @@ impl<'a> ExperimentClient<'a> {
             }
         }
 
-        self.transport.get_json(url)
+        self.transport.get_json(url).await
     }
 
-    pub fn latest(&self) -> Result<Option<ExperimentResponse>, ClientError> {
-        self.transport.get_json("experiments/latest")
+    pub async fn latest(&self) -> Result<Option<ExperimentResponse>, ClientError> {
+        self.transport.get_json("experiments/latest").await
     }
 
-    pub fn metric_metadata(
+    pub async fn metric_metadata(
         &self,
         experiment_num: i32,
     ) -> Result<MetricMetadataResponse, ClientError> {
         self.transport
             .get_json(format!("experiments/{experiment_num}/metrics/metadata"))
+            .await
     }
 
-    pub fn metric_summary(
+    pub async fn metric_summary(
         &self,
         experiment_num: i32,
         query: MetricSummaryQuery,
@@ -76,10 +81,10 @@ impl<'a> ExperimentClient<'a> {
             .join(&format!("experiments/{experiment_num}/metrics/summary"));
         url.query_pairs_mut().append_pair("metric", &query.metric);
 
-        self.transport.get_optional_json(url)
+        self.transport.get_optional_json(url).await
     }
 
-    pub fn metrics(
+    pub async fn metrics(
         &self,
         experiment_num: i32,
         query: MetricAggregatedQuery,
@@ -95,7 +100,7 @@ impl<'a> ExperimentClient<'a> {
                 &query.downsampling_factor.to_string(),
             );
 
-        self.transport.get_optional_json(url)
+        self.transport.get_optional_json(url).await
     }
 
     pub fn websocket_url(&self, experiment_num: i32) -> String {
@@ -122,57 +127,66 @@ impl<'a> ExperimentClient<'a> {
         Ok(ws_client)
     }
 
-    pub fn cancel(&self, experiment_num: i32) -> Result<(), ClientError> {
+    pub async fn cancel(&self, experiment_num: i32) -> Result<(), ClientError> {
         self.transport
             .post(format!("experiments/{experiment_num}/cancel"), None::<()>)
+            .await
     }
 
-    pub fn create_artifact(
+    pub async fn create_artifact(
         &self,
         experiment_num: i32,
         request: CreateArtifactRequest,
     ) -> Result<ArtifactCreationResponse, ClientError> {
-        self.transport.post_json(
-            format!("experiments/{experiment_num}/artifacts"),
-            Some(request),
-        )
+        self.transport
+            .post_json(
+                format!("experiments/{experiment_num}/artifacts"),
+                Some(request),
+            )
+            .await
     }
 
-    pub fn add_artifact_files(
+    pub async fn add_artifact_files(
         &self,
         experiment_num: i32,
         artifact_id: impl std::fmt::Display,
         request: AddFilesRequest,
     ) -> Result<ArtifactCreationResponse, ClientError> {
-        self.transport.post_json(
-            format!("experiments/{experiment_num}/artifacts/{artifact_id}/files"),
-            Some(request),
-        )
+        self.transport
+            .post_json(
+                format!("experiments/{experiment_num}/artifacts/{artifact_id}/files"),
+                Some(request),
+            )
+            .await
     }
 
-    pub fn complete_artifact_upload(
+    pub async fn complete_artifact_upload(
         &self,
         experiment_num: i32,
         artifact_id: impl std::fmt::Display,
         request: CompleteUploadRequest,
     ) -> Result<(), ClientError> {
-        self.transport.post(
-            format!("experiments/{experiment_num}/artifacts/{artifact_id}/complete"),
-            Some(request),
-        )
+        self.transport
+            .post(
+                format!("experiments/{experiment_num}/artifacts/{artifact_id}/complete"),
+                Some(request),
+            )
+            .await
     }
 
-    pub fn presign_artifact_download(
+    pub async fn presign_artifact_download(
         &self,
         experiment_num: i32,
         artifact_id: impl std::fmt::Display,
     ) -> Result<ArtifactDownloadResponse, ClientError> {
-        self.transport.get_json(format!(
-            "experiments/{experiment_num}/artifacts/{artifact_id}/download"
-        ))
+        self.transport
+            .get_json(format!(
+                "experiments/{experiment_num}/artifacts/{artifact_id}/download"
+            ))
+            .await
     }
 
-    pub fn list_artifacts(
+    pub async fn list_artifacts(
         &self,
         experiment_num: i32,
         query: ListArtifactsQuery,
@@ -184,25 +198,31 @@ impl<'a> ExperimentClient<'a> {
             url.query_pairs_mut().append_pair("name", &name);
         }
 
-        self.transport.get_json(url)
+        self.transport.get_json(url).await
     }
 
-    pub fn delete_artifact(
+    pub async fn delete_artifact(
         &self,
         experiment_num: i32,
         artifact_id: impl std::fmt::Display,
     ) -> Result<DeleteExperimentArtifactResponse, ClientError> {
-        self.transport.delete_json(format!(
-            "experiments/{experiment_num}/artifacts/{artifact_id}"
-        ))
+        self.transport
+            .delete_json(format!(
+                "experiments/{experiment_num}/artifacts/{artifact_id}"
+            ))
+            .await
     }
 
-    pub fn realtime_logs(&self, experiment_num: i32) -> Result<ExperimentLogResponse, ClientError> {
+    pub async fn realtime_logs(
+        &self,
+        experiment_num: i32,
+    ) -> Result<ExperimentLogResponse, ClientError> {
         self.transport
             .get_json(format!("experiments/{experiment_num}/logs/realtime"))
+            .await
     }
 
-    pub fn logs(
+    pub async fn logs(
         &self,
         experiment_num: i32,
         query: LogUrlsQuery,
@@ -215,6 +235,6 @@ impl<'a> ExperimentClient<'a> {
                 .append_pair("start", &start.to_string());
         }
 
-        self.transport.get_json(url)
+        self.transport.get_json(url).await
     }
 }

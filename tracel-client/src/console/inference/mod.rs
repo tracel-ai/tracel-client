@@ -11,7 +11,7 @@ impl Client {
     /// Create a new inference group in the given project.
     ///
     /// The client must be logged in before calling this method.
-    pub fn create_inference_group(
+    pub async fn create_inference_group(
         &self,
         owner_name: &str,
         project_name: &str,
@@ -19,14 +19,16 @@ impl Client {
         description: Option<String>,
     ) -> Result<InferenceGroupResponse, ClientError> {
         let path = format!("projects/{owner_name}/{project_name}/inference-groups");
-        self.transport.post_json(
-            path,
-            Some(CreateInferenceGroupRequest { name, description }),
-        )
+        self.transport
+            .post_json(
+                path,
+                Some(CreateInferenceGroupRequest { name, description }),
+            )
+            .await
     }
 
     /// Fetch an inference group by name.
-    pub fn get_inference_group(
+    pub async fn get_inference_group(
         &self,
         owner_name: &str,
         project_name: &str,
@@ -34,11 +36,11 @@ impl Client {
     ) -> Result<InferenceGroupResponse, ClientError> {
         let path =
             format!("projects/{owner_name}/{project_name}/inference-groups/{inference_group_name}");
-        self.transport.get_json(path)
+        self.transport.get_json(path).await
     }
 
     /// Ingest a batch of telemetry (metrics, descriptors and logs) into an inference group.
-    pub fn ingest_inference_telemetry(
+    pub async fn ingest_inference_telemetry(
         &self,
         owner_name: &str,
         project_name: &str,
@@ -48,6 +50,6 @@ impl Client {
         let path = format!(
             "projects/{owner_name}/{project_name}/inference-groups/{inference_group_name}/telemetry"
         );
-        self.transport.post(path, Some(telemetry))
+        self.transport.post(path, Some(telemetry)).await
     }
 }

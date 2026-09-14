@@ -8,14 +8,17 @@
 //! ```no_run
 //! use tracel_client::console::{Client, Env, TracelCredentials, auth::DeviceAuthClient};
 //!
-//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
+//! # async fn run() -> Result<(), Box<dyn std::error::Error>> {
 //! let device_auth = DeviceAuthClient::new(Env::Production, "tracel-cli");
 //!
-//! let token = device_auth.authorize(|auth| {
-//!     println!("Open {} and enter {}", auth.verification_uri, auth.user_code);
-//! })?;
+//! let token = device_auth
+//!     .authorize(|auth| {
+//!         println!("Open {} and enter {}", auth.verification_uri, auth.user_code);
+//!     })
+//!     .await?;
 //!
-//! let client = Client::connect(Env::Production, &TracelCredentials::session_token(token))?;
+//! let client =
+//!     Client::connect(Env::Production, &TracelCredentials::session_token(token)).await?;
 //! # Ok(())
 //! # }
 //! ```
@@ -26,8 +29,11 @@ mod error;
 mod request;
 mod response;
 
-use std::time::{Duration, Instant};
+use std::pin::pin;
+use std::time::Duration;
 
+use futures_timer::Delay;
+use futures_util::future::{Either, select};
 use reqwest::Url;
 
 use crate::console::client::Env;
@@ -101,42 +107,46 @@ impl DeviceAuthClient {
     /// Runs the flow to completion.
     ///
     /// Calls `on_started` with the pending authorization so it can be shown to
-    /// the user, then blocks until the request is answered. Use [`start`] and
+    /// the user, then waits until the request is answered. Use [`start`] and
     /// [`poll`] to drive the flow manually.
     ///
     /// [`start`]: Self::start
     /// [`poll`]: Self::poll
-    pub fn authorize<F>(&self, on_started: F) -> Result<SessionToken, DeviceFlowError>
+    pub async fn authorize<F>(&self, on_started: F) -> Result<SessionToken, DeviceFlowError>
     where
         F: FnOnce(&DeviceCodeResponse),
     {
-        let authorization = self.start()?;
+        let authorization = self.start().await?;
         on_started(&authorization);
-        self.wait_for_approval(&authorization)
+        self.wait_for_approval(&authorization).await
     }
 
     /// Requests a device code.
-    pub fn start(&self) -> Result<DeviceCodeResponse, DeviceFlowError> {
+    pub async fn start(&self) -> Result<DeviceCodeResponse, DeviceFlowError> {
         self.post_form(
             "auth/device/code",
             &DeviceCodeRequest {
                 client_id: &self.client_id,
             },
         )
+        .await
     }
 
     /// Polls the token endpoint once.
     ///
     /// A pending or throttled poll is an [`Ok`] outcome; only a terminal
     /// failure is an error.
-    pub fn poll(&self, device_code: &str) -> Result<DevicePollOutcome, DeviceFlowError> {
+    pub async fn poll(&self, device_code: &str) -> Result<DevicePollOutcome, DeviceFlowError> {
         let request = DeviceTokenRequest {
             grant_type: DEVICE_CODE_GRANT,
             device_code,
             client_id: &self.client_id,
         };
 
-        match self.post_form::<_, DeviceSessionResponse>("auth/token", &request) {
+        match self
+            .post_form::<_, DeviceSessionResponse>("auth/token", &request)
+            .await
+        {
             Ok(response) => Ok(DevicePollOutcome::Approved(SessionToken::new(
                 response.session_token,
             ))),
@@ -150,29 +160,37 @@ impl DeviceAuthClient {
         }
     }
 
-    /// Blocks until the user answers or `authorization` expires.
+    /// Waits until the user answers or `authorization` expires.
     ///
     /// Sleeps for the interval the server asked for between polls, backing off
     /// further on `slow_down`.
-    pub fn wait_for_approval(
+    pub async fn wait_for_approval(
         &self,
         authorization: &DeviceCodeResponse,
     ) -> Result<SessionToken, DeviceFlowError> {
         let lifetime = authorization.expires_in();
-        let deadline = Instant::now() + lifetime;
+        let expiry = pin!(Delay::new(lifetime));
+        let answer = pin!(self.poll_until_answered(authorization));
+
+        match select(expiry, answer).await {
+            Either::Left(((), _)) => Err(DeviceFlowError::TimedOut(lifetime)),
+            Either::Right((answer, _)) => answer,
+        }
+    }
+
+    /// Polls until the user approves the request or the flow fails.
+    async fn poll_until_answered(
+        &self,
+        authorization: &DeviceCodeResponse,
+    ) -> Result<SessionToken, DeviceFlowError> {
         let mut interval = authorization.interval().max(MIN_POLL_INTERVAL);
 
         loop {
-            let remaining = deadline.saturating_duration_since(Instant::now());
-            if remaining.is_zero() {
-                return Err(DeviceFlowError::TimedOut(lifetime));
-            }
-
             // Sleep before the first poll too: polling eagerly only makes the
             // server raise the interval.
-            std::thread::sleep(interval.min(remaining));
+            Delay::new(interval).await;
 
-            match self.poll(&authorization.device_code)? {
+            match self.poll(&authorization.device_code).await? {
                 DevicePollOutcome::Approved(token) => return Ok(token),
                 DevicePollOutcome::Pending => {}
                 DevicePollOutcome::SlowDown => interval += SLOW_DOWN_INCREMENT,
@@ -184,7 +202,7 @@ impl DeviceAuthClient {
     ///
     /// These endpoints take forms rather than JSON and report failures as
     /// `{"error": "<code>"}`, so the transport's JSON helpers do not apply.
-    fn post_form<B, R>(&self, path: &str, body: &B) -> Result<R, DeviceFlowError>
+    async fn post_form<B, R>(&self, path: &str, body: &B) -> Result<R, DeviceFlowError>
     where
         B: serde::Serialize,
         R: for<'de> serde::Deserialize<'de>,
@@ -195,23 +213,23 @@ impl DeviceAuthClient {
             .form(body);
 
         tracing::debug!("Sending device authorization request to Burn API: {request:?}");
-        let response = request.send().map_err(ClientError::from)?;
+        let response = request.send().await.map_err(ClientError::from)?;
         tracing::debug!("Received device authorization response from Burn API: {response:?}");
 
         if response.status() == reqwest::StatusCode::BAD_REQUEST {
-            return Err(bad_request_error(response));
+            return Err(bad_request_error(response).await);
         }
 
-        let response = response.map_to_tracel_err()?;
-        let bytes = response.bytes().map_err(ClientError::from)?;
+        let response = response.map_to_tracel_err().await?;
+        let bytes = response.bytes().await.map_err(ClientError::from)?;
         serde_json::from_slice(&bytes).map_err(|error| ClientError::from(error).into())
     }
 }
 
 /// Maps an HTTP 400 response to a [`DeviceFlowError`].
-fn bad_request_error(response: reqwest::blocking::Response) -> DeviceFlowError {
+async fn bad_request_error(response: reqwest::Response) -> DeviceFlowError {
     let status = response.status();
-    match response.text() {
+    match response.text().await {
         Ok(body) => parse_bad_request_body(status, body),
         Err(error) => ClientError::from(error).into(),
     }

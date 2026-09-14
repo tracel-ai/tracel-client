@@ -43,23 +43,24 @@ impl Client {
     /// Both paths then read back the authenticated user, so the returned client
     /// is known to work. Fails with [`ClientError::Unauthorized`] if the
     /// credentials are rejected.
-    pub fn connect(env: Env, credentials: &TracelCredentials) -> Result<Self, ClientError> {
-        Self::connect_to(env.get_url(), env, credentials)
+    pub async fn connect(env: Env, credentials: &TracelCredentials) -> Result<Self, ClientError> {
+        Self::connect_to(env.get_url(), env, credentials).await
     }
 
-    fn connect_to(
+    async fn connect_to(
         url: Url,
         env: Env,
         credentials: &TracelCredentials,
     ) -> Result<Self, ClientError> {
         let mut transport = ApiTransport::new(url);
-        transport.set_auth(authenticate(&transport, credentials)?);
+        transport.set_auth(authenticate(&transport, credentials).await?);
 
         // Proves the session is live. The endpoint answers 200 with a `null`
         // body rather than 401 when it is not.
         let url = transport.join("user");
         let user = transport
-            .get_json::<Option<UserResponseSchema>>(url)?
+            .get_json::<Option<UserResponseSchema>>(url)
+            .await?
             .ok_or(ClientError::Unauthorized)?;
 
         Ok(Client {
@@ -73,8 +74,8 @@ impl Client {
     ///
     /// For servers [`Env`] cannot name, such as a local devstack. Behaves like
     /// [`connect`](Client::connect) otherwise.
-    pub fn from_url(url: Url, credentials: &TracelCredentials) -> Result<Self, ClientError> {
-        Self::connect_to(url, Env::Production, credentials)
+    pub async fn from_url(url: Url, credentials: &TracelCredentials) -> Result<Self, ClientError> {
+        Self::connect_to(url, Env::Production, credentials).await
     }
 
     /// Ends the session this client is authenticated with.
@@ -82,8 +83,10 @@ impl Client {
     /// Consumes the client: after the server has revoked the session, no call
     /// through it can succeed. Fails with [`ClientError::Unauthorized`] if the
     /// session had already expired.
-    pub fn logout(self) -> Result<(), ClientError> {
-        self.transport.post("logout", None::<serde_json::Value>)
+    pub async fn logout(self) -> Result<(), ClientError> {
+        self.transport
+            .post("logout", None::<serde_json::Value>)
+            .await
     }
 
     #[deprecated]

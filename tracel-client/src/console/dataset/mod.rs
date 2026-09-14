@@ -21,82 +21,92 @@ impl Client {
     /// Creates a new dataset within the specified project.
     ///
     /// The client must be logged in before calling this method.
-    pub fn create_dataset(
+    pub async fn create_dataset(
         &self,
         namespace: &str,
         project_name: &str,
         req: CreateDatasetRequest,
     ) -> Result<DatasetResponse, ClientError> {
-        self.transport.post_json(
-            format!("projects/{namespace}/{project_name}/datasets"),
-            Some(req),
-        )
+        self.transport
+            .post_json(
+                format!("projects/{namespace}/{project_name}/datasets"),
+                Some(req),
+            )
+            .await
     }
 
     /// Queries the datasets of a project.
     ///
     /// The client must be logged in before calling this method.
-    pub fn query_datasets(
+    pub async fn query_datasets(
         &self,
         namespace: &str,
         project_name: &str,
         req: QueryDatasetsRequest,
     ) -> Result<DatasetListResponse, ClientError> {
-        self.transport.post_json(
-            format!("projects/{namespace}/{project_name}/datasets/query"),
-            Some(req),
-        )
+        self.transport
+            .post_json(
+                format!("projects/{namespace}/{project_name}/datasets/query"),
+                Some(req),
+            )
+            .await
     }
 
     /// Get details about a specific dataset.
     ///
     /// The client must be logged in before calling this method.
-    pub fn get_dataset(
+    pub async fn get_dataset(
         &self,
         namespace: &str,
         project_name: &str,
         dataset_name: &str,
     ) -> Result<DatasetResponse, ClientError> {
-        self.transport.get_json(format!(
-            "projects/{namespace}/{project_name}/datasets/{dataset_name}"
-        ))
+        self.transport
+            .get_json(format!(
+                "projects/{namespace}/{project_name}/datasets/{dataset_name}"
+            ))
+            .await
     }
 
     /// Queries the published versions of a dataset.
     ///
     /// The client must be logged in before calling this method.
-    pub fn query_dataset_versions(
+    pub async fn query_dataset_versions(
         &self,
         namespace: &str,
         project_name: &str,
         dataset_name: &str,
         req: QueryDatasetVersionsRequest,
     ) -> Result<DatasetVersionListResponse, ClientError> {
-        self.transport.post_json(
-            format!("projects/{namespace}/{project_name}/datasets/{dataset_name}/versions"),
-            Some(req),
-        )
+        self.transport
+            .post_json(
+                format!("projects/{namespace}/{project_name}/datasets/{dataset_name}/versions"),
+                Some(req),
+            )
+            .await
     }
 
     /// Starts an upload that becomes a new dataset version.
     ///
     /// The client must be logged in before calling this method.
-    pub fn start_dataset_version_upload(
+    pub async fn start_dataset_version_upload(
         &self,
         namespace: &str,
         project_name: &str,
         dataset_name: &str,
     ) -> Result<StartedDatasetVersionUploadResponse, ClientError> {
-        self.transport.post_json(
-            format!("projects/{namespace}/{project_name}/datasets/{dataset_name}/uploads"),
-            None::<()>,
-        )
+        self.transport
+            .post_json(
+                format!("projects/{namespace}/{project_name}/datasets/{dataset_name}/uploads"),
+                None::<()>,
+            )
+            .await
     }
 
     /// Appends a batch of items to an upload.
     ///
     /// The client must be logged in before calling this method.
-    pub fn add_dataset_version_upload_items(
+    pub async fn add_dataset_version_upload_items(
         &self,
         namespace: &str,
         project_name: &str,
@@ -104,18 +114,17 @@ impl Client {
         upload_id: &str,
         req: AddDatasetVersionUploadItemsRequest,
     ) -> Result<AddDatasetVersionUploadItemsResponse, ClientError> {
-        self.transport.post_json(
-            format!(
-                "projects/{namespace}/{project_name}/datasets/{dataset_name}/uploads/{upload_id}/items"
-            ),
-            Some(req),
-        )
+        let path = format!(
+            "projects/{namespace}/{project_name}/datasets/{dataset_name}/uploads/{upload_id}/items"
+        );
+
+        self.transport.post_json(path, Some(req)).await
     }
 
     /// Publishes an upload as a new dataset version.
     ///
     /// The client must be logged in before calling this method.
-    pub fn complete_dataset_version_upload(
+    pub async fn complete_dataset_version_upload(
         &self,
         namespace: &str,
         project_name: &str,
@@ -123,30 +132,28 @@ impl Client {
         upload_id: &str,
         req: CompleteDatasetVersionUploadRequest,
     ) -> Result<DatasetVersionResponse, ClientError> {
-        self.transport.post_json(
-            format!(
-                "projects/{namespace}/{project_name}/datasets/{dataset_name}/uploads/{upload_id}/complete"
-            ),
-            Some(req),
-        )
+        let path = format!(
+            "projects/{namespace}/{project_name}/datasets/{dataset_name}/uploads/{upload_id}/complete"
+        );
+
+        self.transport.post_json(path, Some(req)).await
     }
 
     /// Abandons an upload, discarding the items it holds.
     ///
     /// The client must be logged in before calling this method.
-    pub fn cancel_dataset_version_upload(
+    pub async fn cancel_dataset_version_upload(
         &self,
         namespace: &str,
         project_name: &str,
         dataset_name: &str,
         upload_id: &str,
     ) -> Result<(), ClientError> {
-        self.transport.post(
-            format!(
-                "projects/{namespace}/{project_name}/datasets/{dataset_name}/uploads/{upload_id}/cancel"
-            ),
-            None::<()>,
-        )
+        let path = format!(
+            "projects/{namespace}/{project_name}/datasets/{dataset_name}/uploads/{upload_id}/cancel"
+        );
+
+        self.transport.post(path, None::<()>).await
     }
 
     /// Streams a page of items from a dataset version.
@@ -155,7 +162,7 @@ impl Client {
     /// received plus one, since the indices a version holds need not be contiguous.
     ///
     /// The client must be logged in before calling this method.
-    pub fn stream_dataset_version_items(
+    pub async fn stream_dataset_version_items(
         &self,
         namespace: &str,
         project_name: &str,
@@ -177,8 +184,10 @@ impl Client {
             format!("?{}", query.join("&"))
         };
 
-        self.transport.get_json(format!(
+        let path = format!(
             "projects/{namespace}/{project_name}/datasets/{dataset_name}/versions/{version}/items{query}"
-        ))
+        );
+
+        self.transport.get_json(path).await
     }
 }
