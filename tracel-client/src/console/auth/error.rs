@@ -16,6 +16,9 @@ pub enum OAuthErrorCode {
     AuthorizationPending,
     /// The device code is unknown, spent, or past its lifetime.
     ExpiredToken,
+    /// The refresh token is unknown, expired, revoked, already rotated, or was
+    /// presented by another client.
+    InvalidGrant,
     /// The request was malformed or incomplete.
     InvalidRequest,
     /// The client polled faster than its interval.
@@ -41,6 +44,10 @@ pub enum DeviceFlowError {
     /// The device code is spent or past its lifetime.
     #[error("The device code expired before it was approved")]
     ExpiredToken,
+    /// The refresh token is spent or no longer honoured. Terminal: run a new device
+    /// authorization.
+    #[error("The refresh token was rejected; a new device authorization is needed")]
+    InvalidGrant,
     /// The code expired while [`wait_for_approval`] was polling it.
     ///
     /// [`wait_for_approval`]: super::DeviceAuthClient::wait_for_approval
@@ -58,6 +65,7 @@ impl From<OAuthErrorCode> for DeviceFlowError {
         match code {
             OAuthErrorCode::AccessDenied => DeviceFlowError::AccessDenied,
             OAuthErrorCode::ExpiredToken => DeviceFlowError::ExpiredToken,
+            OAuthErrorCode::InvalidGrant => DeviceFlowError::InvalidGrant,
             other => DeviceFlowError::OAuth(other),
         }
     }

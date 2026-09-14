@@ -46,9 +46,37 @@ impl Debug for DeviceCodeResponse {
 }
 
 /// Body of a successful `POST auth/token`.
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Deserialize, Clone)]
 pub struct DeviceSessionResponse {
     pub session_token: String,
+    /// Refresh token of the lineage the device authorization opened. A credential; do
+    /// not display or log it. Absent from a server that predates the refresh grant.
+    #[serde(default)]
+    pub refresh_token: Option<String>,
+    /// Seconds left before the refresh lineage expires.
+    #[serde(default)]
+    pub refresh_token_expires_in: Option<i64>,
+}
+
+impl DeviceSessionResponse {
+    /// Time left before the refresh lineage expires.
+    pub fn refresh_token_expires_in(&self) -> Option<Duration> {
+        self.refresh_token_expires_in.map(seconds_to_duration)
+    }
+}
+
+/// Redacts the session token and the refresh token.
+impl Debug for DeviceSessionResponse {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("DeviceSessionResponse")
+            .field("session_token", &"[REDACTED]")
+            .field(
+                "refresh_token",
+                &self.refresh_token.as_ref().map(|_| "[REDACTED]"),
+            )
+            .field("refresh_token_expires_in", &self.refresh_token_expires_in)
+            .finish()
+    }
 }
 
 /// Clamps negative values, which only a misbehaving server would send.
