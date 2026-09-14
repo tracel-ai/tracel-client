@@ -97,3 +97,33 @@ impl FromStr for SessionToken {
         }
     }
 }
+
+/// An opaque Tracel refresh token.
+///
+/// Issued alongside a [`SessionToken`] by
+/// [`DeviceAuthClient`](crate::console::auth::DeviceAuthClient), and rotated by every
+/// refresh grant it is spent on. Its lineage stays valid for seven days from the device
+/// authorization that opened it, however often the session is renewed.
+#[derive(Clone, PartialEq, Eq)]
+pub struct RefreshToken(String);
+
+impl RefreshToken {
+    pub fn new(token: impl Into<String>) -> Self {
+        Self(token.into())
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    pub fn into_string(self) -> String {
+        self.0
+    }
+}
+
+/// Redacts the token.
+impl Debug for RefreshToken {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_str("RefreshToken([REDACTED])")
+    }
+}

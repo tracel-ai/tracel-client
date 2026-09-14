@@ -12,4 +12,4 @@ pub mod session;
 pub mod user;
 
 pub use client::{Client, Env};
-pub use credentials::{SessionToken, TracelCredentials};
+pub use credentials::{RefreshToken, SessionToken, TracelCredentials};

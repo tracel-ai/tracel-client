@@ -11,11 +11,12 @@
 //! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! let device_auth = DeviceAuthClient::new(Env::Production, "tracel-cli");
 //!
-//! let token = device_auth.authorize(|auth| {
+//! let session = device_auth.authorize(|auth| {
 //!     println!("Open {} and enter {}", auth.verification_uri, auth.user_code);
 //! })?;
 //!
-//! let client = Client::connect(Env::Production, &TracelCredentials::session_token(token))?;
+//! let credentials = TracelCredentials::session_token(session.session_token);
+//! let client = Client::connect(Env::Production, &credentials)?;
 //! # Ok(())
 //! # }
 //! ```
@@ -31,12 +32,12 @@ use std::time::{Duration, Instant};
 use reqwest::Url;
 
 use crate::console::client::Env;
-use crate::console::credentials::SessionToken;
+use crate::console::credentials::{RefreshToken, SessionToken};
 use crate::error::{ApiErrorBody, ApiErrorCode, ClientError};
 use crate::transport::{ApiTransport, ResponseExt};
 
 use error::OAuthErrorResponse;
-use request::{DeviceCodeRequest, DeviceTokenRequest};
+use request::{DeviceCodeRequest, DeviceTokenRequest, RefreshTokenRequest};
 use response::DeviceSessionResponse;
 
 pub use error::{DeviceFlowError, OAuthErrorCode};
@@ -44,6 +45,9 @@ pub use response::DeviceCodeResponse;
 
 /// `grant_type` of the device authorization flow (RFC 8628 §3.4).
 const DEVICE_CODE_GRANT: &str = "urn:ietf:params:oauth:grant-type:device_code";
+
+/// `grant_type` that trades a refresh token for a new session (RFC 6749 §6).
+const REFRESH_TOKEN_GRANT: &str = "refresh_token";
 
 /// Added to the poll interval on every `slow_down`.
 ///
@@ -62,7 +66,29 @@ pub enum DevicePollOutcome {
     /// Polled too soon; back off by five seconds.
     SlowDown,
     /// The user approved the request.
-    Approved(SessionToken),
+    Approved(IssuedSession),
+}
+
+/// What one answer from the token endpoint grants.
+#[derive(Debug, Clone)]
+pub struct IssuedSession {
+    /// Session to connect a [`Client`](crate::console::Client) with.
+    pub session_token: SessionToken,
+    /// Grant that renews the session without another device authorization. A server
+    /// that predates the refresh grant issues none.
+    pub refresh: Option<RefreshGrant>,
+}
+
+/// A refresh token and the time its lineage has left.
+#[derive(Debug, Clone)]
+pub struct RefreshGrant {
+    /// Token to spend on the next [`DeviceAuthClient::refresh_session`]. Every exchange
+    /// rotates it, so the one that comes back replaces the one that was spent.
+    pub refresh_token: RefreshToken,
+    /// Time left before the lineage expires and the user has to authorize a device
+    /// again. Fixed when the device authorization opened the lineage; refreshing does
+    /// not extend it.
+    pub refresh_token_expires_in: Duration,
 }
 
 /// Client for the device authorization flow.
@@ -106,7 +132,7 @@ impl DeviceAuthClient {
     ///
     /// [`start`]: Self::start
     /// [`poll`]: Self::poll
-    pub fn authorize<F>(&self, on_started: F) -> Result<SessionToken, DeviceFlowError>
+    pub fn authorize<F>(&self, on_started: F) -> Result<IssuedSession, DeviceFlowError>
     where
         F: FnOnce(&DeviceCodeResponse),
     {
@@ -137,9 +163,9 @@ impl DeviceAuthClient {
         };
 
         match self.post_form::<_, DeviceSessionResponse>("auth/token", &request) {
-            Ok(response) => Ok(DevicePollOutcome::Approved(SessionToken::new(
-                response.session_token,
-            ))),
+            Ok(response) => Ok(DevicePollOutcome::Approved(
+                issued_session_from_token_response(response),
+            )),
             Err(DeviceFlowError::OAuth(OAuthErrorCode::AuthorizationPending)) => {
                 Ok(DevicePollOutcome::Pending)
             }
@@ -157,7 +183,7 @@ impl DeviceAuthClient {
     pub fn wait_for_approval(
         &self,
         authorization: &DeviceCodeResponse,
-    ) -> Result<SessionToken, DeviceFlowError> {
+    ) -> Result<IssuedSession, DeviceFlowError> {
         let lifetime = authorization.expires_in();
         let deadline = Instant::now() + lifetime;
         let mut interval = authorization.interval().max(MIN_POLL_INTERVAL);
@@ -173,11 +199,31 @@ impl DeviceAuthClient {
             std::thread::sleep(interval.min(remaining));
 
             match self.poll(&authorization.device_code)? {
-                DevicePollOutcome::Approved(token) => return Ok(token),
+                DevicePollOutcome::Approved(session) => return Ok(session),
                 DevicePollOutcome::Pending => {}
                 DevicePollOutcome::SlowDown => interval += SLOW_DOWN_INCREMENT,
             }
         }
+    }
+
+    /// Trades a refresh token for a new session.
+    ///
+    /// The server rotates the token on every exchange, so the grant that comes back
+    /// replaces the one spent here. A token it no longer honours is
+    /// [`DeviceFlowError::InvalidGrant`], and only a new device authorization recovers
+    /// from that.
+    pub fn refresh_session(
+        &self,
+        refresh_token: &RefreshToken,
+    ) -> Result<IssuedSession, DeviceFlowError> {
+        let request = RefreshTokenRequest {
+            grant_type: REFRESH_TOKEN_GRANT,
+            refresh_token: refresh_token.as_str(),
+            client_id: &self.client_id,
+        };
+
+        self.post_form::<_, DeviceSessionResponse>("auth/token", &request)
+            .map(issued_session_from_token_response)
     }
 
     /// Sends a form-encoded request and decodes a JSON response.
@@ -205,6 +251,25 @@ impl DeviceAuthClient {
         let response = response.map_to_tracel_err()?;
         let bytes = response.bytes().map_err(ClientError::from)?;
         serde_json::from_slice(&bytes).map_err(|error| ClientError::from(error).into())
+    }
+}
+
+/// Both grants answer with the same body, and both read it the same way.
+///
+/// A refresh grant needs both the token and its lifetime to be usable, so a response
+/// carrying only one of them grants no refresh at all.
+fn issued_session_from_token_response(response: DeviceSessionResponse) -> IssuedSession {
+    let refresh_token_expires_in = response.refresh_token_expires_in();
+    let refresh = response.refresh_token.zip(refresh_token_expires_in).map(
+        |(refresh_token, refresh_token_expires_in)| RefreshGrant {
+            refresh_token: RefreshToken::new(refresh_token),
+            refresh_token_expires_in,
+        },
+    );
+
+    IssuedSession {
+        session_token: SessionToken::new(response.session_token),
+        refresh,
     }
 }
 
