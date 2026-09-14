@@ -1,7 +1,6 @@
 use std::time::Duration;
 
 use reqwest::Url;
-use reqwest::header::COOKIE;
 
 use crate::error::{ApiErrorBody, ApiErrorCode, ClientError};
 
@@ -100,10 +99,26 @@ impl ApiTransport {
             .timeout(API_CALL_TIMEOUT)
             .header("X-SDK-Version", env!("CARGO_PKG_VERSION"));
 
+        self.authenticated(request)
+    }
+
+    /// Attaches the session to `request` as the `Cookie` header.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn authenticated(&self, request: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
         match &self.auth {
             Auth::None => request,
-            Auth::SessionCookie(cookie) => request.header(COOKIE, cookie),
+            Auth::SessionCookie(cookie) => request.header(reqwest::header::COOKIE, cookie),
         }
+    }
+
+    /// Leaves the session to the browser.
+    ///
+    /// `fetch` silently drops a `Cookie` header set from a script, so the
+    /// request runs with credentials included and the browser's cookie jar
+    /// supplies the session instead; [`Auth`] is not consulted.
+    #[cfg(target_arch = "wasm32")]
+    fn authenticated(&self, request: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
+        request.fetch_credentials_include()
     }
 
     pub async fn get_json<R>(&self, path: impl AsRef<str>) -> Result<R, ClientError>
