@@ -14,7 +14,7 @@ repository = "https://github.com/tracel-ai/burn-central-client"
 license = "MIT OR Apache-2.0"
 
 [workspace.dependencies]
-reqwest = { version = "0.13.4", features = ["form"] }
+reqwest = { version = "0.13.4", default-features = false, features = ["form"] }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = { version = "1.0.150" }
 serde_with = { version = "3.21.0", features = ["base64", "macros"] }

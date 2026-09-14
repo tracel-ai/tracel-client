@@ -10,6 +10,7 @@ const UPLOAD_SECONDS_ALLOWED_PER_MEGABYTE: u64 = 10;
 
 const MIN_UPLOAD_TIMEOUT: Duration = Duration::from_secs(120);
 
+#[cfg(not(target_arch = "wasm32"))]
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
 
 fn timeout_worth_allowing_an_upload_of(size_bytes: u64) -> Duration {
@@ -57,14 +58,9 @@ pub struct ApiTransport {
 #[allow(unused)]
 impl ApiTransport {
     pub fn new(base_url: Url) -> Self {
-        let upload_client = reqwest::Client::builder()
-            .connect_timeout(CONNECT_TIMEOUT)
-            .tcp_keepalive(MIN_UPLOAD_TIMEOUT)
-            .build()
-            .expect("failed to build HTTP upload client");
         Self {
             http_client: reqwest::Client::new(),
-            upload_client,
+            upload_client: upload_client(),
             base_url: with_trailing_slash(base_url),
             auth: Auth::None,
         }
@@ -271,6 +267,29 @@ impl ApiTransport {
             .join(path)
             .expect("Should be able to join url")
     }
+}
+
+/// Builds the client presigned uploads go through.
+///
+/// A long transfer must not be cut by an idle connection, so the connection
+/// is kept alive and only its setup is bounded; each upload then draws its
+/// own timeout from its size.
+#[cfg(not(target_arch = "wasm32"))]
+fn upload_client() -> reqwest::Client {
+    reqwest::Client::builder()
+        .connect_timeout(CONNECT_TIMEOUT)
+        .tcp_keepalive(MIN_UPLOAD_TIMEOUT)
+        .build()
+        .expect("failed to build HTTP upload client")
+}
+
+/// Builds the client presigned uploads go through.
+///
+/// The browser owns connection setup and keep-alive, leaving only the
+/// per-upload timeout to apply.
+#[cfg(target_arch = "wasm32")]
+fn upload_client() -> reqwest::Client {
+    reqwest::Client::new()
 }
 
 fn with_trailing_slash(mut base_url: Url) -> Url {

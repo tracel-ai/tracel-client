@@ -27,6 +27,7 @@ impl TracelCredentials {
     /// Reads credentials from the environment.
     ///
     /// `TRACEL_API_KEY` takes precedence over `TRACEL_SESSION_TOKEN`.
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn from_env() -> Result<Self, std::env::VarError> {
         if let Ok(api_key) = std::env::var("TRACEL_API_KEY") {
             return Ok(Self::ApiKey(api_key));
@@ -65,6 +66,7 @@ impl SessionToken {
     }
 
     /// Reads a session token from `TRACEL_SESSION_TOKEN`.
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn from_env() -> Result<Self, std::env::VarError> {
         let token = std::env::var("TRACEL_SESSION_TOKEN")?;
         Ok(Self::new(token))
