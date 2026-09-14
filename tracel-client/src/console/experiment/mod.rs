@@ -58,21 +58,15 @@ impl Client {
         Ok(experiment_response)
     }
 
-    pub fn create_experiment_run_websocket(
+    pub async fn create_experiment_run_websocket(
         &self,
         owner_name: &str,
         project_name: &str,
         exp_num: i32,
     ) -> Result<WebSocketClient, WebSocketError> {
-        let mut ws_client = WebSocketClient::new();
-
         let ws_endpoint = self.format_websocket_url(owner_name, project_name, exp_num);
 
-        ws_client
-            .connect(&ws_endpoint, self.transport.auth())
-            .map_err(|e| WebSocketError::ConnectionError(e.to_string()))?;
-
-        Ok(ws_client)
+        WebSocketClient::connect(&ws_endpoint, self.transport.auth()).await
     }
 
     /// Cancel an experiment.

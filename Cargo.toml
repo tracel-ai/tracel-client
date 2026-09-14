@@ -20,10 +20,12 @@ serde_json = { version = "1.0.150" }
 serde_with = { version = "3.21.0", features = ["base64", "macros"] }
 uuid = { version = "1.23.4" }
 thiserror = { version = "2.0.18" }
-futures-util = { version = "0.3.31", default-features = false, features = ["std"] }
+futures-util = { version = "0.3.31", default-features = false, features = ["sink", "std"] }
 futures-timer = { version = "3.0.4" }
 strum = { version = "0.27.2", features = ["derive"] }
-tungstenite = { version = "0.28.0", features = ["rustls-tls-webpki-roots"] }
+tokio = { version = "1", default-features = false, features = ["net"] }
+tokio-tungstenite = { version = "0.28.0", features = ["rustls-tls-webpki-roots"] }
+gloo-net = { version = "0.7.0", default-features = false, features = ["websocket"] }
 rustls = { version = "0.23", features = ["ring"], default-features = false }
 tracing = { version = "0.1" }
 

@@ -1,22 +1,18 @@
-use std::{sync::Once, thread, time::Duration};
+use std::time::Duration;
 
-use reqwest::header::COOKIE;
+use futures_timer::Delay;
 use serde::{Serialize, de::DeserializeOwned};
-
 use thiserror::Error;
 
-use tungstenite::{
-    Message, Utf8Bytes, WebSocket, client::IntoClientRequest, connect, stream::MaybeTlsStream,
-};
-
 mod protocol;
+mod socket;
 
 pub use protocol::*;
 
 use crate::transport::Auth;
+use socket::Socket;
 
 #[derive(Error, Debug)]
-#[allow(clippy::enum_variant_names)]
 pub enum WebSocketError {
     #[error("Failed to connect WebSocket: {0}")]
     ConnectionError(String),
@@ -26,201 +22,99 @@ pub enum WebSocketError {
     ReceiveError(String),
     #[error("WebSocket is not connected")]
     NotConnected,
-    #[error("WebSocket cannot reconnect: {0}")]
-    CannotReconnect(String),
     #[error("Serialization error: {0}")]
     SerializationError(String),
 }
 
-const DEFAULT_RECONNECT_DELAY: Duration = Duration::from_millis(1000);
+const RECONNECT_DELAY: Duration = Duration::from_millis(1000);
 
-static INSTALL_CRYPTO_PROVIDER: Once = Once::new();
-
-/// Ensures a process-level rustls [`CryptoProvider`] is installed.
+/// A JSON message channel over a websocket.
 ///
-/// Multiple rustls crypto backends (`ring` and `aws-lc-rs`) can end up compiled
-/// in through feature unification with other crates in the dependency graph.
-/// When more than one is present, rustls cannot pick a default automatically and
-/// tungstenite's `ClientConfig::builder()` panics. Installing the `ring` provider
-/// explicitly removes that ambiguity. The `Once` makes this idempotent, and any
-/// error means another provider is already installed, which is fine.
-fn ensure_crypto_provider() {
-    INSTALL_CRYPTO_PROVIDER.call_once(|| {
-        let _ = rustls::crypto::ring::default_provider().install_default();
-    });
-}
-
-type Socket = WebSocket<MaybeTlsStream<std::net::TcpStream>>;
-struct ConnectedSocket {
-    socket: Socket,
+/// Every message travels as one text frame. Dropping a connected client ends
+/// the connection without the closing handshake; [`close`] first to let the
+/// server see a clean end.
+///
+/// [`close`]: WebSocketClient::close
+pub struct WebSocketClient {
+    socket: Option<Socket>,
     url: String,
     auth: Auth,
 }
 
-#[derive(Default)]
-pub struct WebSocketClient {
-    state: Option<ConnectedSocket>,
-}
-
 impl WebSocketClient {
-    pub(crate) fn new() -> Self {
-        Self::default()
-    }
+    /// Opens a connection to `url`, authenticated as `auth`.
+    ///
+    /// Native targets send the session as the `Cookie` header of the
+    /// handshake. A browser cannot set handshake headers, so on `wasm32` the
+    /// session token travels as the `token` query parameter instead; accepting
+    /// it there is a server-side coordination item (Q1).
+    pub(crate) async fn connect(url: &str, auth: &Auth) -> Result<Self, WebSocketError> {
+        let socket = Socket::connect(url, auth).await?;
 
-    #[allow(dead_code)]
-    pub fn is_connected(&self) -> bool {
-        self.state.is_some()
-    }
-
-    pub(crate) fn connect(&mut self, url: &str, auth: &Auth) -> Result<(), WebSocketError> {
-        ensure_crypto_provider();
-
-        let mut req = url
-            .into_client_request()
-            .expect("Should be able to create a client request from the URL");
-
-        match &auth {
-            Auth::None => {}
-            Auth::SessionCookie(cookie) => {
-                req.headers_mut().insert(COOKIE, cookie.parse().unwrap());
-            }
-        }
-
-        let (mut socket, _) =
-            connect(req).map_err(|e| WebSocketError::ConnectionError(e.to_string()))?;
-
-        match socket.get_mut() {
-            MaybeTlsStream::Plain(stream) => stream.set_nonblocking(true),
-            MaybeTlsStream::Rustls(stream) => stream.sock.set_nonblocking(true),
-            _ => unimplemented!("Other TLS streams are not supported"),
-        }
-        .map_err(|e| {
-            WebSocketError::ConnectionError(format!("Failed to set non-blocking mode: {e}"))
-        })?;
-
-        let url = url.to_string();
-        self.state = Some(ConnectedSocket {
-            socket,
-            url,
+        Ok(Self {
+            socket: Some(socket),
+            url: url.to_string(),
             auth: auth.clone(),
-        });
-        Ok(())
+        })
     }
 
-    fn reconnect(&mut self) -> Result<(), WebSocketError> {
-        if let Some(socket) = self.state.take() {
-            self.connect(&socket.url, &socket.auth)
-        } else {
-            Err(WebSocketError::CannotReconnect(
-                "The websocket was never opened so it cannot be reconnected".to_string(),
-            ))
-        }
+    /// Whether the connection is open.
+    pub fn is_connected(&self) -> bool {
+        self.socket.is_some()
     }
 
-    /// Sends a message over the WebSocket connection. This is a non-blocking call.
-    /// If sending fails, it attempts to reconnect and resend the message.
-    /// Returns an error if both attempts fail.
-    pub fn send<I: Serialize>(&mut self, message: I) -> Result<(), WebSocketError> {
-        let socket = self.active_socket()?;
-
+    /// Sends `message` as a JSON text frame.
+    ///
+    /// A send that fails on an open connection is retried once over a fresh
+    /// one; the error of that second attempt is returned.
+    pub async fn send<I: Serialize>(&mut self, message: I) -> Result<(), WebSocketError> {
         let json = serde_json::to_string(&message)
             .map_err(|e| WebSocketError::SerializationError(e.to_string()))?;
+        let socket = self.socket.as_mut().ok_or(WebSocketError::NotConnected)?;
 
-        match Self::attempt_send(socket, &json) {
-            Ok(_) => Ok(()),
-            Err(_) => {
-                tracing::debug!("WebSocket send failed, attempting to reconnect...");
-                thread::sleep(DEFAULT_RECONNECT_DELAY);
-                self.reconnect()?;
+        let Err(error) = socket.send_text(&json).await else {
+            return Ok(());
+        };
 
-                let socket = self.active_socket()?;
-                Self::attempt_send(socket, &json)
-            }
-        }
+        tracing::debug!("WebSocket send failed ({error}), reconnecting");
+        Delay::new(RECONNECT_DELAY).await;
+        self.reconnect().await?.send_text(&json).await
     }
 
-    /// Attempts to receive a message from the WebSocket. This is a non-blocking call.
-    /// Returns `Ok(None)` if no message is available.
-    pub fn receive<T: DeserializeOwned>(&mut self) -> Result<Option<T>, WebSocketError> {
-        let socket = self.active_socket()?;
+    async fn reconnect(&mut self) -> Result<&mut Socket, WebSocketError> {
+        self.socket = None;
+        let socket = Socket::connect(&self.url, &self.auth).await?;
 
-        match socket.read() {
-            Ok(msg) => match msg {
-                Message::Text(text) => {
-                    let deserialized: T = serde_json::from_str(&text)
-                        .map_err(|e| WebSocketError::SerializationError(e.to_string()))?;
-                    Ok(Some(deserialized))
-                }
-                Message::Binary(_) => {
-                    tracing::warn!("Received unexpected binary message");
-                    Ok(None)
-                }
-                Message::Ping(_) | Message::Pong(_) | Message::Close(_) => Ok(None),
-                Message::Frame(frame) => {
-                    tracing::warn!("Received unexpected frame message: {:?}", frame);
-                    Ok(None)
-                }
-            },
-            Err(tungstenite::Error::Io(ref e)) if e.kind() == std::io::ErrorKind::WouldBlock => {
-                // No messages available
+        Ok(self.socket.insert(socket))
+    }
+
+    /// Waits for the next message from the server.
+    ///
+    /// Resolves to `None` once the connection is closed; frames that carry no
+    /// text are skipped.
+    pub async fn next<T: DeserializeOwned>(&mut self) -> Result<Option<T>, WebSocketError> {
+        let Some(socket) = self.socket.as_mut() else {
+            return Ok(None);
+        };
+
+        match socket.next_text().await? {
+            Some(text) => serde_json::from_str(&text)
+                .map(Some)
+                .map_err(|e| WebSocketError::SerializationError(e.to_string())),
+            None => {
+                self.socket = None;
                 Ok(None)
             }
-            Err(e) => Err(WebSocketError::ReceiveError(e.to_string())),
         }
     }
 
-    fn attempt_send(socket: &mut Socket, payload: &str) -> Result<(), WebSocketError> {
-        socket
-            .send(Message::Text(Utf8Bytes::from(payload)))
-            .map_err(|e| WebSocketError::SendError(e.to_string()))
-    }
-
-    /// Closes the WebSocket connection gracefully. This is a non-blocking call.
-    pub fn close(&mut self) -> Result<(), WebSocketError> {
-        let socket = self.active_socket()?;
-        socket
-            .close(None)
-            .map_err(|e| WebSocketError::SendError(e.to_string()))
-    }
-
-    /// Waits until the WebSocket connection is fully closed. This is a blocking call that will return once the connection is closed.
-    pub fn wait_until_closed(&mut self) -> Result<(), WebSocketError> {
-        let socket = self.active_socket()?;
-        match socket.get_mut() {
-            MaybeTlsStream::Plain(stream) => stream.set_nonblocking(false),
-            MaybeTlsStream::Rustls(stream) => stream.get_mut().set_nonblocking(false),
-            _ => unimplemented!("Other TLS streams are not supported"),
+    /// Closes the connection, waiting for the closing handshake.
+    ///
+    /// Does nothing when the connection is already closed.
+    pub async fn close(&mut self) -> Result<(), WebSocketError> {
+        match self.socket.take() {
+            Some(socket) => socket.close().await,
+            None => Ok(()),
         }
-        .map_err(|e| {
-            WebSocketError::ConnectionError(format!("Failed to set blocking mode: {e}"))
-        })?;
-        loop {
-            match socket.read() {
-                Ok(_) => {}
-                Err(tungstenite::Error::ConnectionClosed | tungstenite::Error::AlreadyClosed) => {
-                    tracing::debug!("WebSocket connection closed");
-                    break;
-                }
-                Err(e) => {
-                    tracing::error!("WebSocket read error while waiting until closed: {e}");
-                    return Err(WebSocketError::SendError(e.to_string()));
-                }
-            }
-        }
-        Ok(())
-    }
-
-    fn active_socket(&mut self) -> Result<&mut Socket, WebSocketError> {
-        if let Some(socket) = self.state.as_mut() {
-            Ok(&mut socket.socket)
-        } else {
-            Err(WebSocketError::NotConnected)
-        }
-    }
-}
-
-impl Drop for WebSocketClient {
-    fn drop(&mut self) {
-        _ = self.close();
     }
 }

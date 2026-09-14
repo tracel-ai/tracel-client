@@ -117,14 +117,11 @@ impl<'a> ExperimentClient<'a> {
         url.to_string()
     }
 
-    pub fn create_run_websocket(
+    pub async fn create_run_websocket(
         &self,
         experiment_num: i32,
     ) -> Result<WebSocketClient, WebSocketError> {
-        let mut ws_client = WebSocketClient::new();
-        ws_client.connect(&self.websocket_url(experiment_num), self.transport.auth())?;
-
-        Ok(ws_client)
+        WebSocketClient::connect(&self.websocket_url(experiment_num), self.transport.auth()).await
     }
 
     pub async fn cancel(&self, experiment_num: i32) -> Result<(), ClientError> {
