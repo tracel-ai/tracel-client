@@ -12,13 +12,50 @@ pub struct ModelVersionResponse {
     pub id: String,
     pub experiment: Option<ExperimentSourceResponse>,
     pub version: u32,
+    pub state: ModelVersionStateResponse,
+    /// Set on a failed version: `upload_expired`, `upload_incomplete`, `promotion_failed` or
+    /// `promotion_expired`.
+    pub failure_reason: Option<String>,
+    pub source_kind: ModelVersionSourceKindResponse,
     pub size: u64,
-    pub checksum: String,
+    /// The sha256 over the manifest's sorted `rel_path:checksum` lines, never over metadata.
+    pub digest: String,
+    pub aliases: Vec<String>,
     pub created_by: CreatedByUserResponse,
     pub created_at: String,
-    pub manifest: serde_json::Value,
+    pub manifest: ModelVersionManifestResponse,
     #[serde(default)]
     pub metadata: serde_json::Value,
+    pub deleted_at: Option<String>,
+}
+
+/// Only a ready version is listed by default, downloadable, `latest` or an alias target.
+#[derive(Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ModelVersionStateResponse {
+    Pending,
+    Ready,
+    Failed,
+    Deleted,
+}
+
+#[derive(Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ModelVersionSourceKindResponse {
+    Upload,
+    Promotion,
+}
+
+#[derive(Deserialize, Clone, Debug)]
+pub struct ModelVersionManifestResponse {
+    pub files: Vec<ModelFileResponse>,
+}
+
+#[derive(Deserialize, Clone, Debug)]
+pub struct ModelFileResponse {
+    pub rel_path: String,
+    pub size_bytes: u64,
+    pub checksum: String,
 }
 
 #[derive(Deserialize, Clone, Debug)]
