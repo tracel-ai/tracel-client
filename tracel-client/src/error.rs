@@ -80,6 +80,13 @@ impl ClientError {
         )
     }
 
+    pub fn is_conflict(&self) -> bool {
+        matches!(
+            self,
+            ClientError::ApiError { status, .. } if *status == StatusCode::CONFLICT
+        )
+    }
+
     pub fn code(&self) -> Option<ApiErrorCode> {
         match self {
             ClientError::ApiError { body, .. } => Some(body.code.clone()),
