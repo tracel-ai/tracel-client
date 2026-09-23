@@ -3,8 +3,10 @@ use serde::Deserialize;
 use std::fmt::{Display, Formatter};
 use thiserror::Error;
 
+/// A machine-readable error code, displayed the way the server spells it.
 #[derive(Clone, Debug, Deserialize, strum::Display)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 #[non_exhaustive]
 pub enum ApiErrorCode {
     ProjectAlreadyExists,
@@ -12,6 +14,15 @@ pub enum ApiErrorCode {
     LimitReached,
     Dataset,
     DatasetVersion,
+    Model,
+    ModelVersion,
+    ModelAlias,
+    ModelVersionNotReady,
+    ModelVersionDeleted,
+    ModelVersionFailed,
+    ModelVersionUploadIncomplete,
+    MultipartUploadIncomplete,
+    ModelVersionConflict,
     // ...
     #[serde(other)]
     Unknown,
