@@ -5,6 +5,7 @@ pub use request::{CreateModelRequest, UploadModelFileSpecRequest, UploadModelVer
 pub use response::{
     ExperimentSourceResponse, FileDescriptorResponse, ModelDownloadResponse, ModelListResponse,
     ModelResponse, ModelVersionListResponse, ModelVersionManifestResponse, ModelVersionResponse,
+    ModelVersionSourceKindResponse, ModelVersionStateResponse,
     PresignedModelFileUploadUrlsResponse, PresignedModelFileUrlResponse,
     PresignedUploadUrlResponse, UploadModelResponse,
 };
@@ -64,6 +65,17 @@ impl<'a> ModelClient<'a> {
     ) -> Result<ModelVersionResponse, ClientError> {
         self.transport
             .get_json(format!("models/{model_name}/versions/{version}"))
+    }
+
+    /// Resolves `latest`, a version number (`7` or `v7`) or an alias; only a number can name a
+    /// version that is not ready.
+    pub fn resolve(
+        &self,
+        model_name: &str,
+        reference: &str,
+    ) -> Result<ModelVersionResponse, ClientError> {
+        self.transport
+            .get_json(format!("models/{model_name}/refs/{reference}"))
     }
 
     pub fn download(

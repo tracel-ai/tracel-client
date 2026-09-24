@@ -84,6 +84,22 @@ impl Client {
         ))
     }
 
+    /// Resolves `latest`, a version number (`7` or `v7`) or an alias; only a number can name a
+    /// version that is not ready.
+    ///
+    /// The client must be logged in before calling this method.
+    pub fn resolve_model_version_ref(
+        &self,
+        namespace: &str,
+        project_name: &str,
+        model_name: &str,
+        reference: &str,
+    ) -> Result<ModelVersionResponse, ClientError> {
+        self.transport.get_json(format!(
+            "projects/{namespace}/{project_name}/models/{model_name}/refs/{reference}"
+        ))
+    }
+
     /// Generate presigned URLs for downloading model version files.
     ///
     /// The client must be logged in before calling this method.
