@@ -1,5 +1,5 @@
 use reqwest::StatusCode;
-use serde::Deserialize;
+use serde::{Deserialize, Deserializer};
 use std::fmt::{Display, Formatter};
 use thiserror::Error;
 
@@ -30,8 +30,23 @@ pub enum ApiErrorCode {
 
 #[derive(Deserialize, Debug)]
 pub struct ApiErrorBody {
+    #[serde(
+        default = "unknown_api_error_code",
+        deserialize_with = "read_a_null_code_as_unknown"
+    )]
     pub code: ApiErrorCode,
     pub message: String,
+}
+
+fn unknown_api_error_code() -> ApiErrorCode {
+    ApiErrorCode::Unknown
+}
+
+fn read_a_null_code_as_unknown<'de, D>(deserializer: D) -> Result<ApiErrorCode, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    Ok(Option::<ApiErrorCode>::deserialize(deserializer)?.unwrap_or(ApiErrorCode::Unknown))
 }
 
 impl Default for ApiErrorBody {
@@ -112,5 +127,49 @@ impl From<reqwest::Error> for ClientError {
             },
             None => ClientError::UnknownError(error.to_string()),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn api_error_body_with_a_null_code_reads_as_unknown_and_keeps_the_message() {
+        let body: ApiErrorBody =
+            serde_json::from_str(r#"{"message": "Unauthorized access", "code": null}"#).unwrap();
+
+        assert!(matches!(body.code, ApiErrorCode::Unknown));
+        assert_eq!(body.message, "Unauthorized access");
+    }
+
+    #[test]
+    fn api_error_body_without_a_code_reads_as_unknown_and_keeps_the_message() {
+        let body: ApiErrorBody =
+            serde_json::from_str(r#"{"message": "Unauthorized access"}"#).unwrap();
+
+        assert!(matches!(body.code, ApiErrorCode::Unknown));
+        assert_eq!(body.message, "Unauthorized access");
+    }
+
+    #[test]
+    fn api_error_body_with_a_known_code_reads_as_its_variant() {
+        let body: ApiErrorBody = serde_json::from_str(
+            r#"{"message": "Project already exists", "code": "PROJECT_ALREADY_EXISTS"}"#,
+        )
+        .unwrap();
+
+        assert!(matches!(body.code, ApiErrorCode::ProjectAlreadyExists));
+    }
+
+    #[test]
+    fn api_error_body_with_an_unrecognised_code_reads_as_unknown_and_keeps_the_message() {
+        let body: ApiErrorBody = serde_json::from_str(
+            r#"{"message": "Something went wrong", "code": "A_CODE_THIS_CLIENT_DOES_NOT_KNOW"}"#,
+        )
+        .unwrap();
+
+        assert!(matches!(body.code, ApiErrorCode::Unknown));
+        assert_eq!(body.message, "Something went wrong");
     }
 }
