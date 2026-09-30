@@ -23,6 +23,8 @@ pub enum ApiErrorCode {
     ModelVersionUploadIncomplete,
     MultipartUploadIncomplete,
     ModelVersionConflict,
+    Unauthenticated,
+    CredentialNotAllowed,
     // ...
     #[serde(other)]
     Unknown,
@@ -65,15 +67,16 @@ impl Display for ApiErrorBody {
 }
 
 #[derive(Error, Debug)]
+#[non_exhaustive]
 pub enum ClientError {
-    #[error("Bad session id")]
-    BadSessionId,
     #[error("Resource not found")]
     NotFound,
     #[error("Resource not found: {0}")]
     NotFoundWithCode(ApiErrorCode),
-    #[error("Unauthorized access")]
-    Unauthorized,
+    #[error("The credential was not accepted: it is invalid, expired or revoked")]
+    Unauthenticated,
+    #[error("This credential cannot be used for this request")]
+    CredentialNotAllowed,
     #[error("Internal server error")]
     InternalServerError,
     #[error("Api error {status}: {body}")]
@@ -111,7 +114,7 @@ impl ClientError {
     }
 
     pub fn is_login_error(&self) -> bool {
-        matches!(self, ClientError::Unauthorized)
+        matches!(self, ClientError::Unauthenticated)
     }
 }
 
