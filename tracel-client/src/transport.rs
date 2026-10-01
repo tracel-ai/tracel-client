@@ -33,25 +33,6 @@ pub enum Auth {
     AppSession(AppSession),
 }
 
-/// What one request carries, resolved from its [`Auth`] when it leaves.
-pub enum Presented {
-    Nothing,
-    Bearer(HeaderValue),
-    #[cfg(feature = "console")]
-    AppSessionAccess(AccessToken, HeaderValue),
-}
-
-impl Presented {
-    pub fn header(&self) -> Option<&HeaderValue> {
-        match self {
-            Presented::Nothing => None,
-            Presented::Bearer(value) => Some(value),
-            #[cfg(feature = "console")]
-            Presented::AppSessionAccess(_, value) => Some(value),
-        }
-    }
-}
-
 #[allow(dead_code)]
 impl Auth {
     /// An `Authorization: Bearer` credential, marked sensitive so that logging
@@ -60,8 +41,7 @@ impl Auth {
         bearer_header(token).map(Auth::Bearer)
     }
 
-    /// The credential a request leaving now carries. An app session renews
-    /// its access token first when it is about to expire.
+    /// An app session renews an access token about to expire first.
     pub fn present(&self) -> Result<Presented, ClientError> {
         match self {
             Auth::None => Ok(Presented::Nothing),
@@ -89,6 +69,25 @@ impl Auth {
                 Ok(Some(Presented::AppSessionAccess(access_token, header)))
             }
             _ => Ok(None),
+        }
+    }
+}
+
+/// What one request carries, resolved from its [`Auth`] when it leaves.
+pub enum Presented {
+    Nothing,
+    Bearer(HeaderValue),
+    #[cfg(feature = "console")]
+    AppSessionAccess(AccessToken, HeaderValue),
+}
+
+impl Presented {
+    pub fn header(&self) -> Option<&HeaderValue> {
+        match self {
+            Presented::Nothing => None,
+            Presented::Bearer(value) => Some(value),
+            #[cfg(feature = "console")]
+            Presented::AppSessionAccess(_, value) => Some(value),
         }
     }
 }

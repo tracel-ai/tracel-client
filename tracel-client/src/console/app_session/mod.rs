@@ -7,7 +7,7 @@ use std::time::{Duration, SystemTime};
 use thiserror::Error;
 
 use crate::console::auth::{DeviceAuthClient, DeviceFlowError, IssuedAppSession};
-use crate::console::credentials::{AccessToken, RefreshToken};
+use crate::console::{AccessToken, RefreshToken};
 use crate::error::ClientError;
 
 pub use file_store::FileSessionStore;
@@ -97,9 +97,6 @@ impl From<SessionStoreError> for ClientError {
     }
 }
 
-/// Spends a refresh token for a new pair.
-///
-/// [`DeviceAuthClient`] in production; a fake in tests.
 trait Renewer: Send + Sync {
     fn renew(&self, refresh_token: &RefreshToken) -> Result<IssuedAppSession, DeviceFlowError>;
 
@@ -118,14 +115,10 @@ impl Renewer for DeviceAuthClient {
 
 /// An app session the client renews by itself, kept in a [`SessionStore`].
 ///
-/// The device flow signs an app in with an access token that lasts an hour and
-/// a refresh token that renews it for seven days. A
-/// [`Client`](crate::console::Client) connected with an `AppSession` renews the
-/// access token a minute before it expires and once after a 401, so it keeps
-/// working for the whole week. A refresh token is spendable once, so a renewal
-/// runs under the store's exclusion and adopts a session another process sharing
-/// the store already renewed, such as a training run started from the `tracel`
-/// CLI. Clones share the session.
+/// A [`Client`](crate::console::Client) connected with it renews the access
+/// token a minute before it expires and once after a 401. A refresh token is
+/// spendable once, so a renewal runs under the store's exclusion and adopts a
+/// session another process sharing the store already renewed.
 ///
 /// # Examples
 ///
@@ -191,10 +184,8 @@ impl AppSession {
         Ok(self.inner.store.load()?)
     }
 
-    /// Signs the app out on the server, then forgets the stored session.
-    ///
-    /// Signing out with nobody signed in does nothing. If the server cannot be
-    /// reached, the stored session is kept so signing out can be retried.
+    /// Signs the app out on the server, then forgets the stored session, which
+    /// is kept when the server cannot be reached so signing out can be retried.
     pub fn sign_out(&self) -> Result<(), ClientError> {
         let mut current = self.current();
         let mut outcome = Ok(());
@@ -217,11 +208,6 @@ impl AppSession {
 
     /// An access token good for the next request, renewed first when it
     /// would expire within a minute.
-    ///
-    /// For handing the session to a program that speaks to the server
-    /// itself, such as a script given `tracel auth token`. A
-    /// [`Client`](crate::console::Client) connected with this session asks
-    /// for it on its own.
     pub fn access_token(&self) -> Result<AccessToken, ClientError> {
         let mut current = self.current();
         let session = match current.clone() {
@@ -244,10 +230,8 @@ impl AppSession {
         Ok(access_token)
     }
 
-    /// An access token to replace `rejected`, which the server refused.
-    ///
-    /// Another thread or process may have renewed it already; otherwise the
-    /// refresh token is spent now.
+    /// An access token to replace `rejected`, which the server refused, adopting
+    /// one another process already renewed rather than spending the refresh token.
     pub fn access_token_after_rejection(
         &self,
         rejected: &AccessToken,
