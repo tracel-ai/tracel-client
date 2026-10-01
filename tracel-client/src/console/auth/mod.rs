@@ -189,11 +189,6 @@ impl DeviceAuthClient {
     /// comes back replaces the one spent here. A token it no longer honours is
     /// [`DeviceFlowError::InvalidGrant`], and only a new device authorization
     /// recovers from that.
-    ///
-    /// Do not retry a refresh whose answer was lost: the token may have been
-    /// spent. The server lets the same token through again for 30 seconds
-    /// after spending it, for an app that never saw the answer, but only
-    /// while its successor is unspent.
     pub fn refresh(
         &self,
         refresh_token: &RefreshToken,
@@ -208,11 +203,8 @@ impl DeviceAuthClient {
             .map(IssuedAppSession::from)
     }
 
-    /// Signs the app out (RFC 7009).
-    ///
-    /// Takes the app session's refresh token or one of its access tokens, so
-    /// an app can sign out after its access token expired. The server answers
-    /// the same whether or not the token was still live.
+    /// Signs the app out (RFC 7009) with its refresh token or one of its access
+    /// tokens; the server answers the same whether or not the token was live.
     pub fn revoke(&self, token: &str) -> Result<(), DeviceFlowError> {
         self.send_form("auth/revoke", &RevokeTokenRequest { token })
             .map(|_| ())

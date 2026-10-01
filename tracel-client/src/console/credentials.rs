@@ -98,12 +98,8 @@ impl Debug for AccessToken {
     }
 }
 
-/// The refresh token of an app session, `tcl_rt_...`.
-///
-/// Every refresh spends it and returns its successor, so the one that comes
-/// back replaces the one that was spent. The app session it belongs to ends
-/// seven days after the device authorization that opened it, however often it
-/// is refreshed.
+/// The refresh token of an app session, `tcl_rt_...`, spent by every refresh,
+/// which returns its successor.
 #[derive(Clone, PartialEq, Eq)]
 pub struct RefreshToken(String);
 
