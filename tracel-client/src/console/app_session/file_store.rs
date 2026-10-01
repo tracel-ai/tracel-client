@@ -3,6 +3,7 @@ use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+use directories::ProjectDirs;
 use reqwest::Url;
 use serde::{Deserialize, Serialize};
 
@@ -33,17 +34,17 @@ impl FileSessionStore {
         Self { path: path.into() }
     }
 
-    /// The store for the server at `base_url`, in this machine's local state
-    /// directory: `$XDG_STATE_HOME/tracel` or `~/.local/state/tracel` on Linux,
-    /// `~/Library/Application Support/tracel` on macOS, `%LOCALAPPDATA%\tracel`
-    /// on Windows. Each server gets its own file, so signing in to one does
-    /// not sign out of another.
+    /// The store for the server at `base_url`, one file per server in tracel's
+    /// state directory, or its local data directory where the platform has no
+    /// state directory.
     pub fn for_server(base_url: &Url) -> Result<Self, SessionStoreError> {
-        let directory = local_state_directory()
-            .ok_or_else(|| SessionStoreError::new("no local state directory on this machine"))?;
+        let directories = ProjectDirs::from("", "", "tracel")
+            .ok_or_else(|| SessionStoreError::new("no home directory on this machine"))?;
+        let directory = directories
+            .state_dir()
+            .unwrap_or_else(|| directories.data_local_dir());
         Ok(Self::new(
             directory
-                .join("tracel")
                 .join("sessions")
                 .join(format!("{}.json", server_key(base_url))),
         ))
@@ -179,22 +180,6 @@ fn server_key(base_url: &Url) -> String {
             _ => '_',
         })
         .collect()
-}
-
-fn local_state_directory() -> Option<PathBuf> {
-    let from = |variable: &str| {
-        std::env::var_os(variable)
-            .filter(|value| !value.is_empty())
-            .map(PathBuf::from)
-    };
-    if cfg!(windows) {
-        from("LOCALAPPDATA")
-    } else if cfg!(target_os = "macos") {
-        from("HOME").map(|home| home.join("Library").join("Application Support"))
-    } else {
-        from("XDG_STATE_HOME")
-            .or_else(|| from("HOME").map(|home| home.join(".local").join("state")))
-    }
 }
 
 #[cfg(test)]
