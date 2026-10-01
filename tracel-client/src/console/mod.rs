@@ -1,3 +1,4 @@
+pub mod app_session;
 pub mod artifact;
 pub mod auth;
 pub mod client;
@@ -11,5 +12,6 @@ pub mod project;
 pub mod session;
 pub mod user;
 
+pub use app_session::{AppSession, FileSessionStore};
 pub use client::{Client, Env};
-pub use credentials::{RefreshToken, SessionToken, TracelCredentials};
+pub use credentials::{AccessToken, RefreshToken, TracelCredentials};

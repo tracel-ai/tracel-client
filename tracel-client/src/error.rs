@@ -77,6 +77,10 @@ pub enum ClientError {
     Unauthenticated,
     #[error("This credential cannot be used for this request")]
     CredentialNotAllowed,
+    #[error("The app session has ended or was signed out; sign in again")]
+    AppSessionEnded,
+    #[error("{0}")]
+    SessionStore(String),
     #[error("Internal server error")]
     InternalServerError,
     #[error("Api error {status}: {body}")]
@@ -114,7 +118,10 @@ impl ClientError {
     }
 
     pub fn is_login_error(&self) -> bool {
-        matches!(self, ClientError::Unauthenticated)
+        matches!(
+            self,
+            ClientError::Unauthenticated | ClientError::AppSessionEnded
+        )
     }
 }
 

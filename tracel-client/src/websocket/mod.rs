@@ -1,6 +1,6 @@
 use std::{sync::Once, thread, time::Duration};
 
-use reqwest::header::{AUTHORIZATION, COOKIE};
+use reqwest::header::AUTHORIZATION;
 use serde::{Serialize, de::DeserializeOwned};
 
 use thiserror::Error;
@@ -13,7 +13,7 @@ mod protocol;
 
 pub use protocol::*;
 
-use crate::transport::Auth;
+use crate::transport::{Auth, Presented};
 
 #[derive(Error, Debug)]
 #[allow(clippy::enum_variant_names)]
@@ -51,6 +51,20 @@ fn ensure_crypto_provider() {
 }
 
 type Socket = WebSocket<MaybeTlsStream<std::net::TcpStream>>;
+
+/// Opens the socket carrying `presented`, so every (re)connection carries the
+/// credential current when it is made.
+fn handshake(url: &str, presented: &Presented) -> Result<Socket, tungstenite::Error> {
+    let mut request = url.into_client_request()?;
+    if let Some(value) = presented.header() {
+        request.headers_mut().insert(AUTHORIZATION, value.clone());
+    }
+    connect(request).map(|(socket, _)| socket)
+}
+
+fn not_presentable(error: crate::error::ClientError) -> WebSocketError {
+    WebSocketError::ConnectionError(error.to_string())
+}
 struct ConnectedSocket {
     socket: Socket,
     url: String,
@@ -75,22 +89,22 @@ impl WebSocketClient {
     pub(crate) fn connect(&mut self, url: &str, auth: &Auth) -> Result<(), WebSocketError> {
         ensure_crypto_provider();
 
-        let mut req = url
-            .into_client_request()
-            .expect("Should be able to create a client request from the URL");
-
-        match &auth {
-            Auth::None => {}
-            Auth::SessionCookie(cookie) => {
-                req.headers_mut().insert(COOKIE, cookie.parse().unwrap());
+        let presented = auth.present().map_err(not_presentable)?;
+        let mut socket = match handshake(url, &presented) {
+            Err(tungstenite::Error::Http(response))
+                if response.status() == tungstenite::http::StatusCode::UNAUTHORIZED =>
+            {
+                match auth
+                    .present_after_refusal(&presented)
+                    .map_err(not_presentable)?
+                {
+                    Some(renewed) => handshake(url, &renewed),
+                    None => Err(tungstenite::Error::Http(response)),
+                }
             }
-            Auth::Bearer(value) => {
-                req.headers_mut().insert(AUTHORIZATION, value.clone());
-            }
+            outcome => outcome,
         }
-
-        let (mut socket, _) =
-            connect(req).map_err(|e| WebSocketError::ConnectionError(e.to_string()))?;
+        .map_err(|e| WebSocketError::ConnectionError(e.to_string()))?;
 
         match socket.get_mut() {
             MaybeTlsStream::Plain(stream) => stream.set_nonblocking(true),

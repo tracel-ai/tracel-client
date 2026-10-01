@@ -1,6 +1,7 @@
 //! Turning [`TracelCredentials`] into the credential requests carry.
 //!
-//! An API key is sent as a bearer token; a session token names a cookie session.
+//! Every kind is sent as `Authorization: Bearer`; an app session renews its
+//! access token as requests need it.
 
 use crate::console::credentials::TracelCredentials;
 use crate::error::ClientError;
@@ -12,18 +13,18 @@ use crate::transport::Auth;
 pub fn authenticate(credentials: &TracelCredentials) -> Result<Auth, ClientError> {
     match credentials {
         TracelCredentials::ApiKey(api_key) => Auth::bearer(api_key),
-        TracelCredentials::SessionToken(session_token) => {
-            Ok(Auth::session_token(session_token.as_str()))
-        }
+        TracelCredentials::AccessToken(access_token) => Auth::bearer(access_token.as_str()),
+        TracelCredentials::AppSession(app_session) => Ok(Auth::AppSession(app_session.clone())),
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::console::credentials::SessionToken;
+    use crate::console::credentials::AccessToken;
 
     const KEY: &str = "tcl_key_0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefg012345";
+    const ACCESS_TOKEN: &str = "tcl_at_0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefg012345";
 
     #[test]
     fn an_api_key_is_sent_as_a_sensitive_bearer_token() {
@@ -44,9 +45,13 @@ mod tests {
     }
 
     #[test]
-    fn a_session_token_is_sent_as_the_session_cookie() {
-        let auth = authenticate(&SessionToken::new("abc").into()).unwrap();
+    fn an_access_token_is_sent_as_a_sensitive_bearer_token() {
+        let auth = authenticate(&AccessToken::new(ACCESS_TOKEN).into()).unwrap();
 
-        assert!(matches!(auth, Auth::SessionCookie(cookie) if cookie == "id=abc"));
+        let Auth::Bearer(value) = auth else {
+            panic!("an access token should be sent as a bearer token");
+        };
+        assert_eq!(value.to_str().unwrap(), format!("Bearer {ACCESS_TOKEN}"));
+        assert!(value.is_sensitive());
     }
 }

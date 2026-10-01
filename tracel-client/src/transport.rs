@@ -1,8 +1,10 @@
 use std::time::Duration;
 
 use reqwest::Url;
-use reqwest::header::{AUTHORIZATION, COOKIE, HeaderValue};
+use reqwest::header::{AUTHORIZATION, HeaderValue};
 
+#[cfg(feature = "console")]
+use crate::console::{app_session::AppSession, credentials::AccessToken};
 use crate::error::{ApiErrorBody, ApiErrorCode, ClientError};
 
 const API_CALL_TIMEOUT: Duration = Duration::from_secs(120);
@@ -22,34 +24,80 @@ fn timeout_worth_allowing_an_upload_of(size_bytes: u64) -> Duration {
     allowed.max(MIN_UPLOAD_TIMEOUT)
 }
 
-// Which variants are live depends on the enabled features, so the transport
-// itself carries them all rather than gating on them.
 #[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub enum Auth {
     None,
-    SessionCookie(String),
     Bearer(HeaderValue),
+    #[cfg(feature = "console")]
+    AppSession(AppSession),
+}
+
+/// What one request carries, resolved from its [`Auth`] when it leaves.
+pub(crate) enum Presented {
+    Nothing,
+    Bearer(HeaderValue),
+    #[cfg(feature = "console")]
+    AppSessionAccess(AccessToken, HeaderValue),
+}
+
+impl Presented {
+    pub(crate) fn header(&self) -> Option<&HeaderValue> {
+        match self {
+            Presented::Nothing => None,
+            Presented::Bearer(value) => Some(value),
+            #[cfg(feature = "console")]
+            Presented::AppSessionAccess(_, value) => Some(value),
+        }
+    }
 }
 
 #[allow(dead_code)]
 impl Auth {
-    const SESSION_COOKIE_NAME: &'static str = "id";
-
-    /// The device flow returns the bare session id, not a `Set-Cookie` header,
-    /// so the cookie has to be built here.
-    pub fn session_token(token: &str) -> Self {
-        Auth::SessionCookie(format!("{}={token}", Self::SESSION_COOKIE_NAME))
-    }
-
     /// An `Authorization: Bearer` credential, marked sensitive so that logging
     /// a request never prints it.
     pub fn bearer(token: &str) -> Result<Self, ClientError> {
-        let mut value = HeaderValue::from_str(&format!("Bearer {token}"))
-            .map_err(|_| ClientError::Unauthenticated)?;
-        value.set_sensitive(true);
-        Ok(Auth::Bearer(value))
+        bearer_header(token).map(Auth::Bearer)
     }
+
+    /// The credential a request leaving now carries. An app session renews
+    /// its access token first when it is about to expire.
+    pub(crate) fn present(&self) -> Result<Presented, ClientError> {
+        match self {
+            Auth::None => Ok(Presented::Nothing),
+            Auth::Bearer(value) => Ok(Presented::Bearer(value.clone())),
+            #[cfg(feature = "console")]
+            Auth::AppSession(session) => {
+                let access_token = session.access_token()?;
+                let header = bearer_header(access_token.as_str())?;
+                Ok(Presented::AppSessionAccess(access_token, header))
+            }
+        }
+    }
+
+    /// What to carry instead of `refused`, which the server answered with 401,
+    /// or `None` when this credential cannot be renewed.
+    pub(crate) fn present_after_refusal(
+        &self,
+        refused: &Presented,
+    ) -> Result<Option<Presented>, ClientError> {
+        match (self, refused) {
+            #[cfg(feature = "console")]
+            (Auth::AppSession(session), Presented::AppSessionAccess(rejected, _)) => {
+                let access_token = session.access_token_after_rejection(rejected)?;
+                let header = bearer_header(access_token.as_str())?;
+                Ok(Some(Presented::AppSessionAccess(access_token, header)))
+            }
+            _ => Ok(None),
+        }
+    }
+}
+
+fn bearer_header(token: &str) -> Result<HeaderValue, ClientError> {
+    let mut value = HeaderValue::from_str(&format!("Bearer {token}"))
+        .map_err(|_| ClientError::Unauthenticated)?;
+    value.set_sensitive(true);
+    Ok(value)
 }
 
 #[derive(Debug, Clone)]
@@ -102,17 +150,25 @@ impl ApiTransport {
         &self,
         method: reqwest::Method,
         path: impl AsRef<str>,
+    ) -> Result<reqwest::blocking::RequestBuilder, ClientError> {
+        let presented = self.auth.present()?;
+        Ok(self.request_carrying(method, self.join(path.as_ref()), &presented))
+    }
+
+    fn request_carrying(
+        &self,
+        method: reqwest::Method,
+        url: Url,
+        presented: &Presented,
     ) -> reqwest::blocking::RequestBuilder {
-        let url = self.join(path.as_ref());
         let request = self
             .http_client
             .request(method, url)
             .header("X-SDK-Version", env!("CARGO_PKG_VERSION"));
 
-        match &self.auth {
-            Auth::None => request,
-            Auth::SessionCookie(cookie) => request.header(COOKIE, cookie),
-            Auth::Bearer(value) => request.header(AUTHORIZATION, value.clone()),
+        match presented.header() {
+            Some(value) => request.header(AUTHORIZATION, value.clone()),
+            None => request,
         }
     }
 
@@ -190,18 +246,38 @@ impl ApiTransport {
         path: impl AsRef<str>,
         body: Option<T>,
     ) -> Result<reqwest::blocking::Response, ClientError> {
-        let request = self.request(method, path);
+        let body = body.map(|body| serde_json::to_vec(&body)).transpose()?;
+        let url = self.join(path.as_ref());
 
-        let request = if let Some(body) = body {
-            request
-                .body(serde_json::to_vec(&body)?)
-                .header(reqwest::header::CONTENT_TYPE, "application/json")
-        } else {
-            request
+        let presented = self.auth.present()?;
+        let response = self.send(method.clone(), url.clone(), &presented, body.clone())?;
+        if response.status() != reqwest::StatusCode::UNAUTHORIZED {
+            return response.map_to_tracel_err();
+        }
+
+        match self.auth.present_after_refusal(&presented)? {
+            Some(renewed) => self.send(method, url, &renewed, body)?.map_to_tracel_err(),
+            None => response.map_to_tracel_err(),
+        }
+    }
+
+    fn send(
+        &self,
+        method: reqwest::Method,
+        url: Url,
+        presented: &Presented,
+        body: Option<Vec<u8>>,
+    ) -> Result<reqwest::blocking::Response, ClientError> {
+        let request = self.request_carrying(method, url, presented);
+        let request = match body {
+            Some(body) => request
+                .body(body)
+                .header(reqwest::header::CONTENT_TYPE, "application/json"),
+            None => request,
         };
 
         tracing::debug!("Sending request to Burn API: {:?}", request);
-        let response = request.send()?.map_to_tracel_err()?;
+        let response = request.send()?;
         tracing::debug!("Received response from Burn API: {:?}", response);
 
         Ok(response)
