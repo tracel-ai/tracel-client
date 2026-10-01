@@ -226,7 +226,12 @@ impl AppSession {
 
     /// An access token good for the next request, renewed first when it
     /// would expire within a minute.
-    pub(crate) fn access_token(&self) -> Result<AccessToken, ClientError> {
+    ///
+    /// For handing the session to a program that speaks to the server
+    /// itself, such as a script given `tracel auth token`. A
+    /// [`Client`](crate::console::Client) connected with this session asks
+    /// for it on its own.
+    pub fn access_token(&self) -> Result<AccessToken, ClientError> {
         let mut current = self.current();
         let session = match current.clone() {
             Some(session) => session,
