@@ -9,11 +9,11 @@ use crate::{
 impl Client {
     /// Fetches the authenticated user.
     ///
-    /// Returns `Ok(None)` when the session is missing or expired because the server reports that
-    /// state as a successful response with a `null` body.
+    /// Fails with [`ClientError::Unauthenticated`] when the credential is missing, expired or
+    /// revoked.
     ///
     /// [`Client::user`] returns the copy taken on connect, without a request.
-    pub fn get_current_user(&self) -> Result<Option<UserResponseSchema>, ClientError> {
+    pub fn get_current_user(&self) -> Result<UserResponseSchema, ClientError> {
         let url = self.transport.join("user");
         self.transport.get_json(url)
     }

@@ -5,7 +5,7 @@ pub struct UserResponseSchema {
     #[serde(rename = "id")]
     pub _id: i32,
     pub username: String,
-    pub email: String,
+    pub email: Option<String>,
     pub namespace: String,
 }
 

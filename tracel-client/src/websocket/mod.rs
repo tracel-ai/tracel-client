@@ -1,6 +1,6 @@
 use std::{sync::Once, thread, time::Duration};
 
-use reqwest::header::COOKIE;
+use reqwest::header::{AUTHORIZATION, COOKIE};
 use serde::{Serialize, de::DeserializeOwned};
 
 use thiserror::Error;
@@ -83,6 +83,9 @@ impl WebSocketClient {
             Auth::None => {}
             Auth::SessionCookie(cookie) => {
                 req.headers_mut().insert(COOKIE, cookie.parse().unwrap());
+            }
+            Auth::Bearer(value) => {
+                req.headers_mut().insert(AUTHORIZATION, value.clone());
             }
         }
 
