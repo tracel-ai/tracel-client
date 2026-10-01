@@ -1,17 +1,23 @@
 use std::fmt::{Debug, Formatter};
-use std::str::FromStr;
+
+use crate::console::AppSession;
 
 /// Credentials to connect to the Tracel server.
 ///
-/// Either kind authorizes a [`Client`](crate::console::Client) through
-/// [`Client::connect`](crate::console::Client::connect).
-#[derive(Clone, PartialEq, Eq)]
+/// Every kind authorizes a [`Client`](crate::console::Client) through
+/// [`Client::connect`](crate::console::Client::connect), sent as an
+/// `Authorization: Bearer` token.
+#[derive(Clone)]
 pub enum TracelCredentials {
-    /// An API key created from the Tracel console, sent as a bearer token. It
-    /// acts on the projects of the one namespace it was created for.
+    /// An API key created from the Tracel console. It acts on the projects of
+    /// the one namespace it was created for.
     ApiKey(String),
-    /// A session token, issued by the device authorization flow.
-    SessionToken(SessionToken),
+    /// The access token of an app session whose renewal belongs to someone
+    /// else, the application that holds its refresh token. It lasts an hour.
+    AccessToken(AccessToken),
+    /// An app session the client renews by itself through its
+    /// [`SessionStore`](crate::console::SessionStore).
+    AppSession(AppSession),
 }
 
 impl TracelCredentials {
@@ -20,23 +26,23 @@ impl TracelCredentials {
         Self::ApiKey(api_key.into())
     }
 
-    /// Credentials backed by a session token.
-    pub fn session_token(session_token: SessionToken) -> Self {
-        Self::SessionToken(session_token)
+    /// Credentials backed by an access token the caller keeps renewed.
+    pub fn access_token(access_token: AccessToken) -> Self {
+        Self::AccessToken(access_token)
     }
 
-    /// Reads credentials from the environment.
-    ///
-    /// `TRACEL_API_KEY` takes precedence over `TRACEL_SESSION_TOKEN`; an empty
-    /// `TRACEL_API_KEY` reads as unset.
-    pub fn from_env() -> Result<Self, std::env::VarError> {
-        if let Ok(api_key) = std::env::var("TRACEL_API_KEY")
-            && !api_key.is_empty()
-        {
-            return Ok(Self::ApiKey(api_key));
-        }
+    /// Credentials backed by an app session the client renews.
+    pub fn app_session(app_session: AppSession) -> Self {
+        Self::AppSession(app_session)
+    }
 
-        SessionToken::from_env().map(Self::SessionToken)
+    /// Reads an API key from `TRACEL_API_KEY`; an empty value reads as unset.
+    pub fn from_env() -> Result<Self, std::env::VarError> {
+        match std::env::var("TRACEL_API_KEY") {
+            Ok(api_key) if !api_key.is_empty() => Ok(Self::ApiKey(api_key)),
+            Ok(_) => Err(std::env::VarError::NotPresent),
+            Err(error) => Err(error),
+        }
     }
 }
 
@@ -45,33 +51,35 @@ impl Debug for TracelCredentials {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::ApiKey(_) => f.write_str("TracelCredentials::ApiKey([REDACTED])"),
-            Self::SessionToken(_) => f.write_str("TracelCredentials::SessionToken([REDACTED])"),
+            Self::AccessToken(_) => f.write_str("TracelCredentials::AccessToken([REDACTED])"),
+            Self::AppSession(_) => f.write_str("TracelCredentials::AppSession([REDACTED])"),
         }
     }
 }
 
-impl From<SessionToken> for TracelCredentials {
-    fn from(session_token: SessionToken) -> Self {
-        Self::SessionToken(session_token)
+impl From<AccessToken> for TracelCredentials {
+    fn from(access_token: AccessToken) -> Self {
+        Self::AccessToken(access_token)
     }
 }
 
-/// An opaque Tracel session token.
-///
-/// Issued by [`DeviceAuthClient`](crate::console::auth::DeviceAuthClient). Expires after
-/// a day of inactivity.
-#[derive(Clone, PartialEq, Eq)]
-pub struct SessionToken(String);
+impl From<AppSession> for TracelCredentials {
+    fn from(app_session: AppSession) -> Self {
+        Self::AppSession(app_session)
+    }
+}
 
-impl SessionToken {
+/// The access token of an app session, `tcl_at_...`.
+///
+/// Issued with a [`RefreshToken`] by
+/// [`DeviceAuthClient`](crate::console::auth::DeviceAuthClient) and valid for
+/// an hour.
+#[derive(Clone, PartialEq, Eq)]
+pub struct AccessToken(String);
+
+impl AccessToken {
     pub fn new(token: impl Into<String>) -> Self {
         Self(token.into())
-    }
-
-    /// Reads a session token from `TRACEL_SESSION_TOKEN`.
-    pub fn from_env() -> Result<Self, std::env::VarError> {
-        let token = std::env::var("TRACEL_SESSION_TOKEN")?;
-        Ok(Self::new(token))
     }
 
     pub fn as_str(&self) -> &str {
@@ -84,30 +92,14 @@ impl SessionToken {
 }
 
 /// Redacts the token.
-impl Debug for SessionToken {
+impl Debug for AccessToken {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.write_str("SessionToken([REDACTED])")
+        f.write_str("AccessToken([REDACTED])")
     }
 }
 
-impl FromStr for SessionToken {
-    type Err = String;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if s.is_empty() {
-            Err("Session token cannot be empty".to_string())
-        } else {
-            Ok(Self::new(s))
-        }
-    }
-}
-
-/// An opaque Tracel refresh token.
-///
-/// Issued alongside a [`SessionToken`] by
-/// [`DeviceAuthClient`](crate::console::auth::DeviceAuthClient), and rotated by every
-/// refresh grant it is spent on. Its lineage stays valid for seven days from the device
-/// authorization that opened it, however often the session is renewed.
+/// The refresh token of an app session, `tcl_rt_...`, spent by every refresh,
+/// which returns its successor.
 #[derive(Clone, PartialEq, Eq)]
 pub struct RefreshToken(String);
 

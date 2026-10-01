@@ -1,7 +1,7 @@
 use reqwest::Url;
 use serde::{Deserialize, Serialize};
 
-use crate::console::credentials::TracelCredentials;
+use crate::console::TracelCredentials;
 use crate::console::session::authenticate;
 use crate::console::user::response::UserResponseSchema;
 use crate::error::ClientError;
@@ -39,10 +39,11 @@ impl Env {
 impl Client {
     /// Connects to the Tracel server and verifies the credentials.
     ///
-    /// An API key is sent as a bearer token and a session token as the session
-    /// cookie. Either way the authenticated user is read back, so the returned
-    /// client is known to work. Fails with [`ClientError::Unauthenticated`] if
-    /// the server rejects the credential.
+    /// Every kind is sent as a bearer token, and the authenticated user is read
+    /// back, so the returned client is known to work. Fails with
+    /// [`ClientError::Unauthenticated`] if the server rejects the credential,
+    /// and with [`ClientError::AppSessionEnded`] if an app session can no
+    /// longer be renewed.
     pub fn connect(env: Env, credentials: &TracelCredentials) -> Result<Self, ClientError> {
         Self::connect_to(env.get_url(), env, credentials)
     }
@@ -71,15 +72,6 @@ impl Client {
     /// [`connect`](Client::connect) otherwise.
     pub fn from_url(url: Url, credentials: &TracelCredentials) -> Result<Self, ClientError> {
         Self::connect_to(url, Env::Production, credentials)
-    }
-
-    /// Ends the session this client is authenticated with.
-    ///
-    /// Consumes the client: after the server has revoked the session, no call
-    /// through it can succeed. Fails with [`ClientError::Unauthenticated`] if the
-    /// session had already expired.
-    pub fn logout(self) -> Result<(), ClientError> {
-        self.transport.post("logout", None::<serde_json::Value>)
     }
 
     #[deprecated]

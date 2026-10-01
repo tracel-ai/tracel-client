@@ -16,8 +16,10 @@ pub enum OAuthErrorCode {
     AuthorizationPending,
     /// The device code is unknown, spent, or past its lifetime.
     ExpiredToken,
-    /// The refresh token is unknown, expired, revoked, already rotated, or was
-    /// presented by another client.
+    /// The `client_id` is not a first-party Tracel application.
+    InvalidClient,
+    /// The refresh token is unknown, its app session ended or was signed out,
+    /// or it was presented by another client.
     InvalidGrant,
     /// The request was malformed or incomplete.
     InvalidRequest,
@@ -44,7 +46,7 @@ pub enum DeviceFlowError {
     /// The device code is spent or past its lifetime.
     #[error("The device code expired before it was approved")]
     ExpiredToken,
-    /// The refresh token is spent or no longer honoured. Terminal: run a new device
+    /// The refresh token is no longer honoured. Terminal: run a new device
     /// authorization.
     #[error("The refresh token was rejected; a new device authorization is needed")]
     InvalidGrant,

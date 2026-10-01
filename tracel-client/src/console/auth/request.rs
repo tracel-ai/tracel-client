@@ -21,3 +21,9 @@ pub struct RefreshTokenRequest<'a> {
     pub refresh_token: &'a str,
     pub client_id: &'a str,
 }
+
+/// Form body of `POST auth/revoke` (RFC 7009).
+#[derive(Serialize, Clone, Debug)]
+pub struct RevokeTokenRequest<'a> {
+    pub token: &'a str,
+}
