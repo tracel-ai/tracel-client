@@ -1,7 +1,7 @@
 use reqwest::Url;
 use serde::{Deserialize, Serialize};
 
-use crate::console::credentials::TracelCredentials;
+use crate::console::TracelCredentials;
 use crate::console::session::authenticate;
 use crate::console::user::response::UserResponseSchema;
 use crate::error::ClientError;

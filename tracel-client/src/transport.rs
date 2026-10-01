@@ -4,7 +4,7 @@ use reqwest::Url;
 use reqwest::header::{AUTHORIZATION, HeaderValue};
 
 #[cfg(feature = "console")]
-use crate::console::{app_session::AppSession, credentials::AccessToken};
+use crate::console::{AccessToken, AppSession};
 use crate::error::{ApiErrorBody, ApiErrorCode, ClientError};
 
 const API_CALL_TIMEOUT: Duration = Duration::from_secs(120);
@@ -34,7 +34,7 @@ pub enum Auth {
 }
 
 /// What one request carries, resolved from its [`Auth`] when it leaves.
-pub(crate) enum Presented {
+pub enum Presented {
     Nothing,
     Bearer(HeaderValue),
     #[cfg(feature = "console")]
@@ -42,7 +42,7 @@ pub(crate) enum Presented {
 }
 
 impl Presented {
-    pub(crate) fn header(&self) -> Option<&HeaderValue> {
+    pub fn header(&self) -> Option<&HeaderValue> {
         match self {
             Presented::Nothing => None,
             Presented::Bearer(value) => Some(value),
@@ -62,7 +62,7 @@ impl Auth {
 
     /// The credential a request leaving now carries. An app session renews
     /// its access token first when it is about to expire.
-    pub(crate) fn present(&self) -> Result<Presented, ClientError> {
+    pub fn present(&self) -> Result<Presented, ClientError> {
         match self {
             Auth::None => Ok(Presented::Nothing),
             Auth::Bearer(value) => Ok(Presented::Bearer(value.clone())),
@@ -77,7 +77,7 @@ impl Auth {
 
     /// What to carry instead of `refused`, which the server answered with 401,
     /// or `None` when this credential cannot be renewed.
-    pub(crate) fn present_after_refusal(
+    pub fn present_after_refusal(
         &self,
         refused: &Presented,
     ) -> Result<Option<Presented>, ClientError> {
@@ -326,7 +326,7 @@ fn with_trailing_slash(mut base_url: Url) -> Url {
     base_url
 }
 
-pub(crate) trait ResponseExt {
+pub trait ResponseExt {
     fn map_to_tracel_err(self) -> Result<reqwest::blocking::Response, ClientError>;
 }
 

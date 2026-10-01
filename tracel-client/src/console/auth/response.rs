@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::fmt::{Debug, Formatter};
 use std::time::Duration;
 
-use crate::console::credentials::{AccessToken, RefreshToken};
+use crate::console::{AccessToken, RefreshToken};
 
 /// A pending device authorization (RFC 8628 §3.2).
 #[derive(Deserialize, Serialize, Clone)]

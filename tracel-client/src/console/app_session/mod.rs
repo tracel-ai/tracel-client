@@ -1,42 +1,3 @@
-//! An app session the client renews by itself.
-//!
-//! The device flow signs an app in with an access token that lasts an hour
-//! and a refresh token that renews it until the app session ends, seven days
-//! after sign-in. An [`AppSession`] keeps both in a [`SessionStore`] and
-//! renews the access token when it is about to expire or when the server
-//! refuses it, so a [`Client`](crate::console::Client) connected with it keeps
-//! working for the whole week.
-//!
-//! Several processes can share one store, such as the `tracel` CLI and a
-//! training run started from it. A renewal spends the refresh token, so it
-//! runs under the store's exclusion: whoever renews second finds the
-//! session the first one saved and adopts it instead of spending a token that
-//! is already spent.
-//!
-//! # Examples
-//!
-//! ```no_run
-//! use std::sync::Arc;
-//!
-//! use tracel_client::console::app_session::{AppSession, FileSessionStore};
-//! use tracel_client::console::auth::DeviceAuthClient;
-//! use tracel_client::console::{Client, Env, TracelCredentials};
-//!
-//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
-//! let env = Env::Production;
-//! let store = FileSessionStore::for_server(&env.get_url())?;
-//! let app_session = AppSession::new(Arc::new(store), DeviceAuthClient::new(env.clone(), "tracel-cli"));
-//!
-//! let issued = DeviceAuthClient::new(env.clone(), "tracel-cli").authorize(|auth| {
-//!     println!("Open {} and enter {}", auth.verification_uri, auth.user_code);
-//! })?;
-//! app_session.sign_in(issued)?;
-//!
-//! let client = Client::connect(env, &TracelCredentials::app_session(app_session))?;
-//! # Ok(())
-//! # }
-//! ```
-
 mod file_store;
 
 use std::fmt::{Debug, Formatter};
@@ -155,9 +116,39 @@ impl Renewer for DeviceAuthClient {
     }
 }
 
-/// An app session the client renews through its [`SessionStore`].
+/// An app session the client renews by itself, kept in a [`SessionStore`].
 ///
-/// Clones share the session: a renewal by one is seen by all.
+/// The device flow signs an app in with an access token that lasts an hour and
+/// a refresh token that renews it for seven days. A
+/// [`Client`](crate::console::Client) connected with an `AppSession` renews the
+/// access token a minute before it expires and once after a 401, so it keeps
+/// working for the whole week. A refresh token is spendable once, so a renewal
+/// runs under the store's exclusion and adopts a session another process sharing
+/// the store already renewed, such as a training run started from the `tracel`
+/// CLI. Clones share the session.
+///
+/// # Examples
+///
+/// ```no_run
+/// use std::sync::Arc;
+///
+/// use tracel_client::console::auth::DeviceAuthClient;
+/// use tracel_client::console::{AppSession, Client, Env, FileSessionStore, TracelCredentials};
+///
+/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+/// let env = Env::Production;
+/// let store = FileSessionStore::for_server(&env.get_url())?;
+/// let app_session = AppSession::new(Arc::new(store), DeviceAuthClient::new(env.clone(), "tracel-cli"));
+///
+/// let issued = DeviceAuthClient::new(env.clone(), "tracel-cli").authorize(|auth| {
+///     println!("Open {} and enter {}", auth.verification_uri, auth.user_code);
+/// })?;
+/// app_session.sign_in(issued)?;
+///
+/// let client = Client::connect(env, &TracelCredentials::app_session(app_session))?;
+/// # Ok(())
+/// # }
+/// ```
 #[derive(Clone)]
 pub struct AppSession {
     inner: Arc<AppSessionInner>,
@@ -257,7 +248,7 @@ impl AppSession {
     ///
     /// Another thread or process may have renewed it already; otherwise the
     /// refresh token is spent now.
-    pub(crate) fn access_token_after_rejection(
+    pub fn access_token_after_rejection(
         &self,
         rejected: &AccessToken,
     ) -> Result<AccessToken, ClientError> {

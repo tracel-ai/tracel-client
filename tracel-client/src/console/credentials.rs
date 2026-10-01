@@ -1,6 +1,6 @@
 use std::fmt::{Debug, Formatter};
 
-use crate::console::app_session::AppSession;
+use crate::console::AppSession;
 
 /// Credentials to connect to the Tracel server.
 ///
@@ -16,7 +16,7 @@ pub enum TracelCredentials {
     /// else, the application that holds its refresh token. It lasts an hour.
     AccessToken(AccessToken),
     /// An app session the client renews by itself through its
-    /// [`SessionStore`](crate::console::app_session::SessionStore).
+    /// [`SessionStore`](crate::console::SessionStore).
     AppSession(AppSession),
 }
 
