@@ -32,8 +32,8 @@ use std::time::{Duration, Instant};
 
 use reqwest::Url;
 
+use crate::console::RefreshToken;
 use crate::console::client::Env;
-use crate::console::credentials::RefreshToken;
 use crate::error::{ApiErrorBody, ApiErrorCode, ClientError};
 use crate::transport::{ApiTransport, ResponseExt};
 

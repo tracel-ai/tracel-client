@@ -3,7 +3,7 @@
 //! Every kind is sent as `Authorization: Bearer`; an app session renews its
 //! access token as requests need it.
 
-use crate::console::credentials::TracelCredentials;
+use crate::console::TracelCredentials;
 use crate::error::ClientError;
 use crate::transport::Auth;
 
@@ -21,7 +21,7 @@ pub fn authenticate(credentials: &TracelCredentials) -> Result<Auth, ClientError
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::console::credentials::AccessToken;
+    use crate::console::AccessToken;
 
     const KEY: &str = "tcl_key_0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefg012345";
     const ACCESS_TOKEN: &str = "tcl_at_0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefg012345";
