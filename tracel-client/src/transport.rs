@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use reqwest::Url;
-use reqwest::header::COOKIE;
+use reqwest::header::{AUTHORIZATION, COOKIE, HeaderValue};
 
 use crate::error::{ApiErrorBody, ApiErrorCode, ClientError};
 
@@ -29,6 +29,7 @@ fn timeout_worth_allowing_an_upload_of(size_bytes: u64) -> Duration {
 pub enum Auth {
     None,
     SessionCookie(String),
+    Bearer(HeaderValue),
 }
 
 #[allow(dead_code)]
@@ -39,6 +40,15 @@ impl Auth {
     /// so the cookie has to be built here.
     pub fn session_token(token: &str) -> Self {
         Auth::SessionCookie(format!("{}={token}", Self::SESSION_COOKIE_NAME))
+    }
+
+    /// An `Authorization: Bearer` credential, marked sensitive so that logging
+    /// a request never prints it.
+    pub fn bearer(token: &str) -> Result<Self, ClientError> {
+        let mut value = HeaderValue::from_str(&format!("Bearer {token}"))
+            .map_err(|_| ClientError::Unauthenticated)?;
+        value.set_sensitive(true);
+        Ok(Auth::Bearer(value))
     }
 }
 
@@ -102,6 +112,7 @@ impl ApiTransport {
         match &self.auth {
             Auth::None => request,
             Auth::SessionCookie(cookie) => request.header(COOKIE, cookie),
+            Auth::Bearer(value) => request.header(AUTHORIZATION, value.clone()),
         }
     }
 
@@ -262,11 +273,10 @@ impl ResponseExt for reqwest::blocking::Response {
                         None => Err(ClientError::NotFound),
                     }
                 }
-                reqwest::StatusCode::UNAUTHORIZED => Err(ClientError::Unauthorized),
+                reqwest::StatusCode::UNAUTHORIZED => Err(ClientError::Unauthenticated),
                 reqwest::StatusCode::INTERNAL_SERVER_ERROR => Err(ClientError::InternalServerError),
-                _ => Err(ClientError::ApiError {
-                    status: self.status(),
-                    body: self
+                status => {
+                    let body = self
                         .text()
                         .map_err(|e| ClientError::UnknownError(e.to_string()))?
                         .parse::<serde_json::Value>()
@@ -274,8 +284,12 @@ impl ResponseExt for reqwest::blocking::Response {
                         .unwrap_or_else(|e| ApiErrorBody {
                             code: ApiErrorCode::Unknown,
                             message: e.to_string(),
-                        }),
-                }),
+                        });
+                    Err(match body.code {
+                        ApiErrorCode::CredentialNotAllowed => ClientError::CredentialNotAllowed,
+                        _ => ClientError::ApiError { status, body },
+                    })
+                }
             }
         }
     }

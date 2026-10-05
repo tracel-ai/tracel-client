@@ -7,7 +7,8 @@ use std::str::FromStr;
 /// [`Client::connect`](crate::console::Client::connect).
 #[derive(Clone, PartialEq, Eq)]
 pub enum TracelCredentials {
-    /// A long-lived API key, created from the Tracel console.
+    /// An API key created from the Tracel console, sent as a bearer token. It
+    /// acts on the projects of the one namespace it was created for.
     ApiKey(String),
     /// A session token, issued by the device authorization flow.
     SessionToken(SessionToken),
@@ -26,9 +27,12 @@ impl TracelCredentials {
 
     /// Reads credentials from the environment.
     ///
-    /// `TRACEL_API_KEY` takes precedence over `TRACEL_SESSION_TOKEN`.
+    /// `TRACEL_API_KEY` takes precedence over `TRACEL_SESSION_TOKEN`; an empty
+    /// `TRACEL_API_KEY` reads as unset.
     pub fn from_env() -> Result<Self, std::env::VarError> {
-        if let Ok(api_key) = std::env::var("TRACEL_API_KEY") {
+        if let Ok(api_key) = std::env::var("TRACEL_API_KEY")
+            && !api_key.is_empty()
+        {
             return Ok(Self::ApiKey(api_key));
         }
 

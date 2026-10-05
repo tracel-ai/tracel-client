@@ -39,10 +39,10 @@ impl Env {
 impl Client {
     /// Connects to the Tracel server and verifies the credentials.
     ///
-    /// An API key is exchanged for a session; a session token is used as-is.
-    /// Both paths then read back the authenticated user, so the returned client
-    /// is known to work. Fails with [`ClientError::Unauthorized`] if the
-    /// credentials are rejected.
+    /// An API key is sent as a bearer token and a session token as the session
+    /// cookie. Either way the authenticated user is read back, so the returned
+    /// client is known to work. Fails with [`ClientError::Unauthenticated`] if
+    /// the server rejects the credential.
     pub fn connect(env: Env, credentials: &TracelCredentials) -> Result<Self, ClientError> {
         Self::connect_to(env.get_url(), env, credentials)
     }
@@ -53,14 +53,10 @@ impl Client {
         credentials: &TracelCredentials,
     ) -> Result<Self, ClientError> {
         let mut transport = ApiTransport::new(url);
-        transport.set_auth(authenticate(&transport, credentials)?);
+        transport.set_auth(authenticate(credentials)?);
 
-        // Proves the session is live. The endpoint answers 200 with a `null`
-        // body rather than 401 when it is not.
         let url = transport.join("user");
-        let user = transport
-            .get_json::<Option<UserResponseSchema>>(url)?
-            .ok_or(ClientError::Unauthorized)?;
+        let user = transport.get_json::<UserResponseSchema>(url)?;
 
         Ok(Client {
             transport,
@@ -80,7 +76,7 @@ impl Client {
     /// Ends the session this client is authenticated with.
     ///
     /// Consumes the client: after the server has revoked the session, no call
-    /// through it can succeed. Fails with [`ClientError::Unauthorized`] if the
+    /// through it can succeed. Fails with [`ClientError::Unauthenticated`] if the
     /// session had already expired.
     pub fn logout(self) -> Result<(), ClientError> {
         self.transport.post("logout", None::<serde_json::Value>)
