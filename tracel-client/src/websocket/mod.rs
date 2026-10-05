@@ -1,6 +1,6 @@
 use std::{sync::Once, thread, time::Duration};
 
-use reqwest::header::{AUTHORIZATION, COOKIE};
+use reqwest::header::AUTHORIZATION;
 use serde::{Serialize, de::DeserializeOwned};
 
 use thiserror::Error;
@@ -13,7 +13,7 @@ mod protocol;
 
 pub use protocol::*;
 
-use crate::transport::Auth;
+use crate::transport::{Auth, Presented};
 
 #[derive(Error, Debug)]
 #[allow(clippy::enum_variant_names)]
@@ -75,22 +75,7 @@ impl WebSocketClient {
     pub(crate) fn connect(&mut self, url: &str, auth: &Auth) -> Result<(), WebSocketError> {
         ensure_crypto_provider();
 
-        let mut req = url
-            .into_client_request()
-            .expect("Should be able to create a client request from the URL");
-
-        match &auth {
-            Auth::None => {}
-            Auth::SessionCookie(cookie) => {
-                req.headers_mut().insert(COOKIE, cookie.parse().unwrap());
-            }
-            Auth::Bearer(value) => {
-                req.headers_mut().insert(AUTHORIZATION, value.clone());
-            }
-        }
-
-        let (mut socket, _) =
-            connect(req).map_err(|e| WebSocketError::ConnectionError(e.to_string()))?;
+        let mut socket = open_socket(url, auth)?;
 
         match socket.get_mut() {
             MaybeTlsStream::Plain(stream) => stream.set_nonblocking(true),
@@ -226,4 +211,34 @@ impl Drop for WebSocketClient {
     fn drop(&mut self) {
         _ = self.close();
     }
+}
+
+/// A 401 renews an app session's access token once before the handshake fails.
+fn open_socket(url: &str, auth: &Auth) -> Result<Socket, WebSocketError> {
+    let presented = auth
+        .present()
+        .map_err(|e| WebSocketError::ConnectionError(e.to_string()))?;
+    match handshake(url, &presented) {
+        Err(tungstenite::Error::Http(response))
+            if response.status() == tungstenite::http::StatusCode::UNAUTHORIZED =>
+        {
+            match auth
+                .present_after_refusal(&presented)
+                .map_err(|e| WebSocketError::ConnectionError(e.to_string()))?
+            {
+                Some(renewed) => handshake(url, &renewed),
+                None => Err(tungstenite::Error::Http(response)),
+            }
+        }
+        outcome => outcome,
+    }
+    .map_err(|e| WebSocketError::ConnectionError(e.to_string()))
+}
+
+fn handshake(url: &str, presented: &Presented) -> Result<Socket, tungstenite::Error> {
+    let mut request = url.into_client_request()?;
+    if let Some(value) = presented.header() {
+        request.headers_mut().insert(AUTHORIZATION, value.clone());
+    }
+    connect(request).map(|(socket, _)| socket)
 }

@@ -1,7 +1,8 @@
 //! OAuth 2.0 Device Authorization Grant ([RFC 8628]).
 //!
-//! Obtains a session on a device that cannot host a browser, by having the user
-//! approve a short code elsewhere.
+//! Signs an app in on a device that cannot host a browser, by having the user
+//! approve a short code elsewhere. The app gets an app session: an access
+//! token that lasts an hour and a refresh token that renews it for seven days.
 //!
 //! # Examples
 //!
@@ -11,11 +12,11 @@
 //! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! let device_auth = DeviceAuthClient::new(Env::Production, "tracel-cli");
 //!
-//! let session = device_auth.authorize(|auth| {
+//! let issued = device_auth.authorize(|auth| {
 //!     println!("Open {} and enter {}", auth.verification_uri, auth.user_code);
 //! })?;
 //!
-//! let credentials = TracelCredentials::session_token(session.session_token);
+//! let credentials = TracelCredentials::access_token(issued.access_token);
 //! let client = Client::connect(Env::Production, &credentials)?;
 //! # Ok(())
 //! # }
@@ -31,22 +32,22 @@ use std::time::{Duration, Instant};
 
 use reqwest::Url;
 
+use crate::console::RefreshToken;
 use crate::console::client::Env;
-use crate::console::credentials::{RefreshToken, SessionToken};
 use crate::error::{ApiErrorBody, ApiErrorCode, ClientError};
 use crate::transport::{ApiTransport, ResponseExt};
 
 use error::OAuthErrorResponse;
-use request::{DeviceCodeRequest, DeviceTokenRequest, RefreshTokenRequest};
-use response::DeviceSessionResponse;
+use request::{DeviceCodeRequest, DeviceTokenRequest, RefreshTokenRequest, RevokeTokenRequest};
+use response::AppTokenResponse;
 
 pub use error::{DeviceFlowError, OAuthErrorCode};
-pub use response::DeviceCodeResponse;
+pub use response::{DeviceCodeResponse, IssuedAppSession};
 
 /// `grant_type` of the device authorization flow (RFC 8628 §3.4).
 const DEVICE_CODE_GRANT: &str = "urn:ietf:params:oauth:grant-type:device_code";
 
-/// `grant_type` that trades a refresh token for a new session (RFC 6749 §6).
+/// `grant_type` that trades a refresh token for a new pair (RFC 6749 §6).
 const REFRESH_TOKEN_GRANT: &str = "refresh_token";
 
 /// Added to the poll interval on every `slow_down`.
@@ -65,30 +66,8 @@ pub enum DevicePollOutcome {
     Pending,
     /// Polled too soon; back off by five seconds.
     SlowDown,
-    /// The user approved the request.
-    Approved(IssuedSession),
-}
-
-/// What one answer from the token endpoint grants.
-#[derive(Debug, Clone)]
-pub struct IssuedSession {
-    /// Session to connect a [`Client`](crate::console::Client) with.
-    pub session_token: SessionToken,
-    /// Grant that renews the session without another device authorization. A server
-    /// that predates the refresh grant issues none.
-    pub refresh: Option<RefreshGrant>,
-}
-
-/// A refresh token and the time its lineage has left.
-#[derive(Debug, Clone)]
-pub struct RefreshGrant {
-    /// Token to spend on the next [`DeviceAuthClient::refresh_session`]. Every exchange
-    /// rotates it, so the one that comes back replaces the one that was spent.
-    pub refresh_token: RefreshToken,
-    /// Time left before the lineage expires and the user has to authorize a device
-    /// again. Fixed when the device authorization opened the lineage; refreshing does
-    /// not extend it.
-    pub refresh_token_expires_in: Duration,
+    /// The user approved the request and the app is signed in.
+    Approved(IssuedAppSession),
 }
 
 /// Client for the device authorization flow.
@@ -101,9 +80,9 @@ pub struct DeviceAuthClient {
 impl DeviceAuthClient {
     /// Creates a client for `env`.
     ///
-    /// `client_id` identifies the requesting application, e.g. `tracel-cli`. It
-    /// must be non-empty, at most 128 bytes, and free of control characters and
-    /// surrounding whitespace.
+    /// `client_id` names the signing-in application. Only Tracel's own apps,
+    /// `tracel-cli` and `metabolic`, may sign in; the server answers any other
+    /// with [`OAuthErrorCode::InvalidClient`].
     pub fn new(env: Env, client_id: impl Into<String>) -> Self {
         Self {
             transport: ApiTransport::new(env.get_url()),
@@ -132,7 +111,7 @@ impl DeviceAuthClient {
     ///
     /// [`start`]: Self::start
     /// [`poll`]: Self::poll
-    pub fn authorize<F>(&self, on_started: F) -> Result<IssuedSession, DeviceFlowError>
+    pub fn authorize<F>(&self, on_started: F) -> Result<IssuedAppSession, DeviceFlowError>
     where
         F: FnOnce(&DeviceCodeResponse),
     {
@@ -162,10 +141,8 @@ impl DeviceAuthClient {
             client_id: &self.client_id,
         };
 
-        match self.post_form::<_, DeviceSessionResponse>("auth/token", &request) {
-            Ok(response) => Ok(DevicePollOutcome::Approved(
-                issued_session_from_token_response(response),
-            )),
+        match self.post_form::<_, AppTokenResponse>("auth/token", &request) {
+            Ok(response) => Ok(DevicePollOutcome::Approved(response.into())),
             Err(DeviceFlowError::OAuth(OAuthErrorCode::AuthorizationPending)) => {
                 Ok(DevicePollOutcome::Pending)
             }
@@ -183,7 +160,7 @@ impl DeviceAuthClient {
     pub fn wait_for_approval(
         &self,
         authorization: &DeviceCodeResponse,
-    ) -> Result<IssuedSession, DeviceFlowError> {
+    ) -> Result<IssuedAppSession, DeviceFlowError> {
         let lifetime = authorization.expires_in();
         let deadline = Instant::now() + lifetime;
         let mut interval = authorization.interval().max(MIN_POLL_INTERVAL);
@@ -206,24 +183,31 @@ impl DeviceAuthClient {
         }
     }
 
-    /// Trades a refresh token for a new session.
+    /// Trades a refresh token for a new access token and refresh token.
     ///
-    /// The server rotates the token on every exchange, so the grant that comes back
-    /// replaces the one spent here. A token it no longer honours is
-    /// [`DeviceFlowError::InvalidGrant`], and only a new device authorization recovers
-    /// from that.
-    pub fn refresh_session(
+    /// The server rotates the refresh token on every exchange, so the one that
+    /// comes back replaces the one spent here. A token it no longer honours is
+    /// [`DeviceFlowError::InvalidGrant`], and only a new device authorization
+    /// recovers from that.
+    pub fn refresh(
         &self,
         refresh_token: &RefreshToken,
-    ) -> Result<IssuedSession, DeviceFlowError> {
+    ) -> Result<IssuedAppSession, DeviceFlowError> {
         let request = RefreshTokenRequest {
             grant_type: REFRESH_TOKEN_GRANT,
             refresh_token: refresh_token.as_str(),
             client_id: &self.client_id,
         };
 
-        self.post_form::<_, DeviceSessionResponse>("auth/token", &request)
-            .map(issued_session_from_token_response)
+        self.post_form::<_, AppTokenResponse>("auth/token", &request)
+            .map(IssuedAppSession::from)
+    }
+
+    /// Signs the app out (RFC 7009) with its refresh token or one of its access
+    /// tokens; the server answers the same whether or not the token was live.
+    pub fn revoke(&self, token: &str) -> Result<(), DeviceFlowError> {
+        self.send_form("auth/revoke", &RevokeTokenRequest { token })
+            .map(|_| ())
     }
 
     /// Sends a form-encoded request and decodes a JSON response.
@@ -235,9 +219,22 @@ impl DeviceAuthClient {
         B: serde::Serialize,
         R: for<'de> serde::Deserialize<'de>,
     {
+        let response = self.send_form(path, body)?;
+        let bytes = response.bytes().map_err(ClientError::from)?;
+        serde_json::from_slice(&bytes).map_err(|error| ClientError::from(error).into())
+    }
+
+    fn send_form<B>(
+        &self,
+        path: &str,
+        body: &B,
+    ) -> Result<reqwest::blocking::Response, DeviceFlowError>
+    where
+        B: serde::Serialize,
+    {
         let request = self
             .transport
-            .request(reqwest::Method::POST, path)
+            .request(reqwest::Method::POST, path)?
             .form(body);
 
         tracing::debug!("Sending device authorization request to Burn API: {request:?}");
@@ -248,28 +245,7 @@ impl DeviceAuthClient {
             return Err(bad_request_error(response));
         }
 
-        let response = response.map_to_tracel_err()?;
-        let bytes = response.bytes().map_err(ClientError::from)?;
-        serde_json::from_slice(&bytes).map_err(|error| ClientError::from(error).into())
-    }
-}
-
-/// Both grants answer with the same body, and both read it the same way.
-///
-/// A refresh grant needs both the token and its lifetime to be usable, so a response
-/// carrying only one of them grants no refresh at all.
-fn issued_session_from_token_response(response: DeviceSessionResponse) -> IssuedSession {
-    let refresh_token_expires_in = response.refresh_token_expires_in();
-    let refresh = response.refresh_token.zip(refresh_token_expires_in).map(
-        |(refresh_token, refresh_token_expires_in)| RefreshGrant {
-            refresh_token: RefreshToken::new(refresh_token),
-            refresh_token_expires_in,
-        },
-    );
-
-    IssuedSession {
-        session_token: SessionToken::new(response.session_token),
-        refresh,
+        Ok(response.map_to_tracel_err()?)
     }
 }
 

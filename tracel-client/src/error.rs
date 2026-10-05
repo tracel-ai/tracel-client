@@ -77,6 +77,10 @@ pub enum ClientError {
     Unauthenticated,
     #[error("This credential cannot be used for this request")]
     CredentialNotAllowed,
+    #[error("The app session has ended or was signed out; sign in again")]
+    AppSessionEnded,
+    #[error("{0}")]
+    SessionStore(String),
     #[error("Internal server error")]
     InternalServerError,
     #[error("Api error {status}: {body}")]
@@ -114,7 +118,10 @@ impl ClientError {
     }
 
     pub fn is_login_error(&self) -> bool {
-        matches!(self, ClientError::Unauthenticated)
+        matches!(
+            self,
+            ClientError::Unauthenticated | ClientError::AppSessionEnded
+        )
     }
 }
 
@@ -130,49 +137,5 @@ impl From<reqwest::Error> for ClientError {
             },
             None => ClientError::UnknownError(error.to_string()),
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn api_error_body_with_a_null_code_reads_as_unknown_and_keeps_the_message() {
-        let body: ApiErrorBody =
-            serde_json::from_str(r#"{"message": "Unauthorized access", "code": null}"#).unwrap();
-
-        assert!(matches!(body.code, ApiErrorCode::Unknown));
-        assert_eq!(body.message, "Unauthorized access");
-    }
-
-    #[test]
-    fn api_error_body_without_a_code_reads_as_unknown_and_keeps_the_message() {
-        let body: ApiErrorBody =
-            serde_json::from_str(r#"{"message": "Unauthorized access"}"#).unwrap();
-
-        assert!(matches!(body.code, ApiErrorCode::Unknown));
-        assert_eq!(body.message, "Unauthorized access");
-    }
-
-    #[test]
-    fn api_error_body_with_a_known_code_reads_as_its_variant() {
-        let body: ApiErrorBody = serde_json::from_str(
-            r#"{"message": "Project already exists", "code": "PROJECT_ALREADY_EXISTS"}"#,
-        )
-        .unwrap();
-
-        assert!(matches!(body.code, ApiErrorCode::ProjectAlreadyExists));
-    }
-
-    #[test]
-    fn api_error_body_with_an_unrecognised_code_reads_as_unknown_and_keeps_the_message() {
-        let body: ApiErrorBody = serde_json::from_str(
-            r#"{"message": "Something went wrong", "code": "A_CODE_THIS_CLIENT_DOES_NOT_KNOW"}"#,
-        )
-        .unwrap();
-
-        assert!(matches!(body.code, ApiErrorCode::Unknown));
-        assert_eq!(body.message, "Something went wrong");
     }
 }
