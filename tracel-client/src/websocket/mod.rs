@@ -6,7 +6,8 @@ use serde::{Serialize, de::DeserializeOwned};
 use thiserror::Error;
 
 use tungstenite::{
-    Message, Utf8Bytes, WebSocket, client::IntoClientRequest, connect, stream::MaybeTlsStream,
+    Bytes, Message, Utf8Bytes, WebSocket, client::IntoClientRequest, connect,
+    stream::MaybeTlsStream,
 };
 
 mod protocol;
@@ -55,6 +56,7 @@ struct ConnectedSocket {
     socket: Socket,
     url: String,
     auth: Auth,
+    closed_on_purpose: bool,
 }
 
 #[derive(Default)]
@@ -91,30 +93,50 @@ impl WebSocketClient {
             socket,
             url,
             auth: auth.clone(),
+            closed_on_purpose: false,
         });
         Ok(())
     }
 
+    /// The dead socket stays in place until a new one replaces it, so a failed attempt
+    /// leaves the URL and credentials for the next one.
     fn reconnect(&mut self) -> Result<(), WebSocketError> {
-        if let Some(socket) = self.state.take() {
-            self.connect(&socket.url, &socket.auth)
-        } else {
-            Err(WebSocketError::CannotReconnect(
+        let Some(previous) = self.state.as_ref() else {
+            return Err(WebSocketError::CannotReconnect(
                 "The websocket was never opened so it cannot be reconnected".to_string(),
-            ))
-        }
+            ));
+        };
+        let (url, auth) = (previous.url.clone(), previous.auth.clone());
+        self.connect(&url, &auth)
     }
 
     /// Sends a message over the WebSocket connection. This is a non-blocking call.
     /// If sending fails, it attempts to reconnect and resend the message.
     /// Returns an error if both attempts fail.
     pub fn send<I: Serialize>(&mut self, message: I) -> Result<(), WebSocketError> {
-        let socket = self.active_socket()?;
+        self.active_socket()?;
 
         let json = serde_json::to_string(&message)
             .map_err(|e| WebSocketError::SerializationError(e.to_string()))?;
 
-        match Self::attempt_send(socket, &json) {
+        self.send_frame_reconnecting_once_if_it_fails(Message::Text(Utf8Bytes::from(json)))
+    }
+
+    /// Sends a ping so that proxies between here and the server, which close a connection
+    /// that carries nothing for a while, keep this one open while the caller has nothing to
+    /// say. The server's pong is consumed by [`receive`](Self::receive). Like
+    /// [`send`](Self::send), it reconnects once if the ping cannot be written.
+    pub fn send_keepalive_ping(&mut self) -> Result<(), WebSocketError> {
+        self.send_frame_reconnecting_once_if_it_fails(Message::Ping(Bytes::new()))
+    }
+
+    fn send_frame_reconnecting_once_if_it_fails(
+        &mut self,
+        frame: Message,
+    ) -> Result<(), WebSocketError> {
+        let socket = self.active_socket()?;
+
+        match Self::attempt_send(socket, frame.clone()) {
             Ok(_) => Ok(()),
             Err(_) => {
                 tracing::debug!("WebSocket send failed, attempting to reconnect...");
@@ -122,13 +144,16 @@ impl WebSocketClient {
                 self.reconnect()?;
 
                 let socket = self.active_socket()?;
-                Self::attempt_send(socket, &json)
+                Self::attempt_send(socket, frame)
             }
         }
     }
 
     /// Attempts to receive a message from the WebSocket. This is a non-blocking call.
     /// Returns `Ok(None)` if no message is available.
+    ///
+    /// A connection lost without [`close`](Self::close) having been called is reopened
+    /// before this returns `Ok(None)`; the error is returned only when reopening fails.
     pub fn receive<T: DeserializeOwned>(&mut self) -> Result<Option<T>, WebSocketError> {
         let socket = self.active_socket()?;
 
@@ -153,22 +178,39 @@ impl WebSocketClient {
                 // No messages available
                 Ok(None)
             }
-            Err(e) => Err(WebSocketError::ReceiveError(e.to_string())),
+            Err(e) if self.was_closed_on_purpose() => {
+                Err(WebSocketError::ReceiveError(e.to_string()))
+            }
+            Err(e) => {
+                tracing::debug!(error = %e, "WebSocket connection lost, attempting to reconnect...");
+                thread::sleep(DEFAULT_RECONNECT_DELAY);
+                self.reconnect()?;
+                Ok(None)
+            }
         }
     }
 
-    fn attempt_send(socket: &mut Socket, payload: &str) -> Result<(), WebSocketError> {
+    fn attempt_send(socket: &mut Socket, frame: Message) -> Result<(), WebSocketError> {
         socket
-            .send(Message::Text(Utf8Bytes::from(payload)))
+            .send(frame)
             .map_err(|e| WebSocketError::SendError(e.to_string()))
     }
 
     /// Closes the WebSocket connection gracefully. This is a non-blocking call.
     pub fn close(&mut self) -> Result<(), WebSocketError> {
+        if let Some(connected) = self.state.as_mut() {
+            connected.closed_on_purpose = true;
+        }
         let socket = self.active_socket()?;
         socket
             .close(None)
             .map_err(|e| WebSocketError::SendError(e.to_string()))
+    }
+
+    fn was_closed_on_purpose(&self) -> bool {
+        self.state
+            .as_ref()
+            .is_some_and(|connected| connected.closed_on_purpose)
     }
 
     /// Waits until the WebSocket connection is fully closed. This is a blocking call that will return once the connection is closed.
