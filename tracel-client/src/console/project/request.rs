@@ -10,13 +10,6 @@ pub enum Visibility {
     Public,
 }
 
-#[derive(Serialize, Clone, Debug)]
-pub(crate) struct CreateProjectRequest {
-    pub name: String,
-    pub description: Option<String>,
-    pub visibility: Visibility,
-}
-
 /// Operating system of a binary target. Serializes to match the server's
 /// `OperatingSystem` enum (lowercase: `windows`, `linux`, `macos`).
 #[derive(Debug, Serialize, Clone, Copy, PartialEq, Eq)]
