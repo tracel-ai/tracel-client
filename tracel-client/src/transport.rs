@@ -225,6 +225,17 @@ impl ApiTransport {
         Ok(serde_json::from_slice::<R>(&bytes)?)
     }
 
+    /// Send a JSON body via PUT and deserialize the JSON response.
+    pub fn put_json<T, R>(&self, path: impl AsRef<str>, body: Option<T>) -> Result<R, ClientError>
+    where
+        T: serde::Serialize,
+        R: for<'de> serde::Deserialize<'de>,
+    {
+        let response = self.req(reqwest::Method::PUT, path, body)?;
+        let bytes = response.bytes()?;
+        Ok(serde_json::from_slice::<R>(&bytes)?)
+    }
+
     pub fn delete(&self, path: impl AsRef<str>) -> Result<(), ClientError> {
         self.req(reqwest::Method::DELETE, path, None::<serde_json::Value>)
             .map(|_| ())
@@ -302,6 +313,19 @@ impl ApiTransport {
             .map_to_tracel_err()?;
 
         Ok(())
+    }
+
+    /// Download from an absolute presigned URL into a writer without attaching auth.
+    ///
+    /// No overall timeout is set because the download size is unknown; the connect timeout applies.
+    pub fn download_from_url(
+        &self,
+        url: &str,
+        writer: &mut impl std::io::Write,
+    ) -> Result<u64, ClientError> {
+        let mut response = self.upload_client.get(url).send()?.map_to_tracel_err()?;
+
+        Ok(response.copy_to(writer)?)
     }
 
     pub fn join(&self, path: &str) -> Url {
