@@ -1,14 +1,14 @@
 pub mod request;
 pub mod response;
 
+mod body;
+
 use crate::{
     ClientError,
     console::Client,
     console::artifact::{
-        request::{
-            AddFilesToArtifactRequest, ArtifactFileSpecRequest, CompleteUploadRequest,
-            CreateArtifactRequest,
-        },
+        body::{AddFilesToArtifactRequest, CompleteUploadRequest},
+        request::{ArtifactFileSpecRequest, CreateArtifactRequest},
         response::{
             ArtifactAddFileResponse, ArtifactCreationResponse, ArtifactDownloadResponse,
             ArtifactListResponse, ArtifactResponse,

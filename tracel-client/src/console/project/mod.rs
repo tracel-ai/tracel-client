@@ -1,11 +1,14 @@
 pub mod request;
 pub mod response;
 
+mod body;
+
 use crate::{
     ClientError,
     console::Client,
     console::project::{
-        request::{CreateProjectRequest, PublishProjectVersionRequest, Visibility},
+        body::CreateProjectRequest,
+        request::{PublishProjectVersionRequest, Visibility},
         response::{CodeUploadUrlsResponse, ProjectListResponse, ProjectResponse},
     },
 };

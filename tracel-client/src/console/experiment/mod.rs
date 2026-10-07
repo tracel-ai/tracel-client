@@ -1,6 +1,8 @@
 pub mod request;
 pub mod response;
 
+mod body;
+
 use std::collections::HashMap;
 
 use reqwest::Url;
@@ -10,9 +12,10 @@ use crate::{
     ClientError, WebSocketClient,
     console::Client,
     console::experiment::{
+        body::CreateExperimentSchema,
         request::{
-            CreateExperimentSchema, ExperimentLogQueryRequest, ListExperimentsQuery,
-            MetricAggregatedQuery, MetricSummaryQuery,
+            ExperimentLogQueryRequest, ListExperimentsQuery, MetricAggregatedQuery,
+            MetricSummaryQuery,
         },
         response::{
             ActivityTreeResponse, ExperimentDetailsResponse, ExperimentLogQueryResponse,

@@ -13,13 +13,3 @@ pub struct CreateArtifactRequest {
     pub kind: String,
     pub files: Vec<ArtifactFileSpecRequest>,
 }
-
-#[derive(Serialize, Clone, Debug)]
-pub(crate) struct AddFilesToArtifactRequest {
-    pub files: Vec<ArtifactFileSpecRequest>,
-}
-
-#[derive(Serialize, Clone, Debug)]
-pub(crate) struct CompleteUploadRequest {
-    pub file_names: Option<Vec<String>>,
-}
