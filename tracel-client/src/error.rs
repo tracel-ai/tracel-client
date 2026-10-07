@@ -23,6 +23,7 @@ pub enum ApiErrorCode {
     ModelVersionUploadIncomplete,
     MultipartUploadIncomplete,
     ModelVersionConflict,
+    ComputeProviderJob,
     Unauthenticated,
     CredentialNotAllowed,
     // ...
