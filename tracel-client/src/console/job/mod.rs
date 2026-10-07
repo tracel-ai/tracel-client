@@ -14,14 +14,17 @@ use crate::{
 };
 
 impl Client {
-    /// Queue a job that runs a code version on a compute provider group.
+    /// Queue a job that runs the code version `digest` on a compute provider group.
+    ///
+    /// `command` holds the program's arguments, which the compute provider splits into
+    /// words with shell quoting rules.
     ///
     /// The client must be logged in before calling this method.
-    pub fn start_remote_job(
+    pub fn queue_job(
         &self,
-        compute_provider_group_name: &str,
-        owner_name: &str,
+        namespace: &str,
         project_name: &str,
+        compute_provider_group_name: &str,
         digest: &str,
         command: &str,
     ) -> Result<QueuedJobResponse, ClientError> {
@@ -32,7 +35,7 @@ impl Client {
         };
 
         self.transport.post_json(
-            format!("projects/{owner_name}/{project_name}/jobs/queue"),
+            format!("projects/{namespace}/{project_name}/jobs/queue"),
             Some(body),
         )
     }
