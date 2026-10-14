@@ -1,8 +1,8 @@
-pub mod request;
+mod body;
 
 use crate::{
     ClientError,
-    console::{Client, job::request::ComputeProviderQueueJobRequest},
+    console::{Client, job::body::ComputeProviderQueueJobRequest},
 };
 
 impl Client {

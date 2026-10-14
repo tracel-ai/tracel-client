@@ -1,11 +1,14 @@
 pub mod request;
 pub mod response;
 
+mod body;
+
 use crate::{
     ClientError,
     console::Client,
     console::project::{
-        request::{CreateProjectRequest, PublishProjectVersionRequest, Visibility},
+        body::CreateProjectRequest,
+        request::{PublishProjectVersionRequest, Visibility},
         response::{CodeUploadUrlsResponse, ProjectListResponse, ProjectResponse},
     },
 };
@@ -117,5 +120,16 @@ impl Client {
     /// Upload raw bytes to an absolute presigned upload URL (PUT).
     pub fn upload_bytes_to_url(&self, url: &str, bytes: Vec<u8>) -> Result<(), ClientError> {
         self.transport.upload_bytes_to_url(url, bytes)
+    }
+
+    /// Download from an absolute presigned URL into a writer without attaching auth.
+    ///
+    /// No overall timeout is set because the download size is unknown; the connect timeout applies.
+    pub fn download_from_url(
+        &self,
+        url: &str,
+        writer: &mut impl std::io::Write,
+    ) -> Result<u64, ClientError> {
+        self.transport.download_from_url(url, writer)
     }
 }
