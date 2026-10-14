@@ -9,21 +9,6 @@ use crate::error::{ApiErrorBody, ApiErrorCode, ClientError};
 
 const API_CALL_TIMEOUT: Duration = Duration::from_secs(120);
 
-const UPLOAD_SECONDS_ALLOWED_PER_MEGABYTE: u64 = 10;
-
-const MIN_UPLOAD_TIMEOUT: Duration = Duration::from_secs(120);
-
-const CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
-
-fn timeout_worth_allowing_an_upload_of(size_bytes: u64) -> Duration {
-    const BYTES_PER_MEGABYTE: u64 = 1024 * 1024;
-    let megabytes = size_bytes.div_ceil(BYTES_PER_MEGABYTE);
-    let allowed =
-        Duration::from_secs(megabytes.saturating_mul(UPLOAD_SECONDS_ALLOWED_PER_MEGABYTE));
-
-    allowed.max(MIN_UPLOAD_TIMEOUT)
-}
-
 #[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub enum Auth {
@@ -102,7 +87,6 @@ fn bearer_header(token: &str) -> Result<HeaderValue, ClientError> {
 #[derive(Debug, Clone)]
 pub struct ApiTransport {
     http_client: reqwest::blocking::Client,
-    upload_client: reqwest::blocking::Client,
     base_url: Url,
     auth: Auth,
 }
@@ -114,15 +98,8 @@ impl ApiTransport {
             .timeout(API_CALL_TIMEOUT)
             .build()
             .expect("failed to build HTTP client");
-        let upload_client = reqwest::blocking::Client::builder()
-            .timeout(None)
-            .connect_timeout(CONNECT_TIMEOUT)
-            .tcp_keepalive(MIN_UPLOAD_TIMEOUT)
-            .build()
-            .expect("failed to build HTTP upload client");
         Self {
             http_client,
-            upload_client,
             base_url: with_trailing_slash(base_url),
             auth: Auth::None,
         }
@@ -298,41 +275,6 @@ impl ApiTransport {
         tracing::debug!("Received response from Burn API: {:?}", response);
 
         Ok(response)
-    }
-
-    /// Upload raw bytes to an absolute (presigned) URL via PUT.
-    ///
-    /// Unlike the other helpers this does NOT join the path with `base_url` and
-    /// does NOT attach auth — presigned URLs (e.g. S3) are absolute and
-    /// self-authenticating.
-    ///
-    /// The request is given [a timeout drawn from its own
-    /// size](timeout_worth_allowing_an_upload_of) rather than the one API calls
-    /// get, which no upload larger than a few megabytes would survive.
-    pub fn upload_bytes_to_url(&self, url: &str, bytes: Vec<u8>) -> Result<(), ClientError> {
-        let timeout = timeout_worth_allowing_an_upload_of(bytes.len() as u64);
-
-        self.upload_client
-            .put(url)
-            .timeout(timeout)
-            .body(bytes)
-            .send()?
-            .map_to_tracel_err()?;
-
-        Ok(())
-    }
-
-    /// Download from an absolute presigned URL into a writer without attaching auth.
-    ///
-    /// No overall timeout is set because the download size is unknown; the connect timeout applies.
-    pub fn download_from_url(
-        &self,
-        url: &str,
-        writer: &mut impl std::io::Write,
-    ) -> Result<u64, ClientError> {
-        let mut response = self.upload_client.get(url).send()?.map_to_tracel_err()?;
-
-        Ok(response.copy_to(writer)?)
     }
 
     pub fn join(&self, path: &str) -> Url {
