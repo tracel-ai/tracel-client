@@ -2,6 +2,7 @@
 name = "tracel-client"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 authors.workspace = true
 description = "Collection of HTTP calls required to communicate with the Tracel backend"
 homepage.workspace = true

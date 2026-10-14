@@ -236,6 +236,13 @@ impl ApiTransport {
         Ok(serde_json::from_slice::<R>(&bytes)?)
     }
 
+    pub fn put<T>(&self, path: impl AsRef<str>, body: Option<T>) -> Result<(), ClientError>
+    where
+        T: serde::Serialize,
+    {
+        self.req(reqwest::Method::PUT, path, body).map(|_| ())
+    }
+
     pub fn delete(&self, path: impl AsRef<str>) -> Result<(), ClientError> {
         self.req(reqwest::Method::DELETE, path, None::<serde_json::Value>)
             .map(|_| ())
