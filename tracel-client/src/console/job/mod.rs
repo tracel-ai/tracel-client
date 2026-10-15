@@ -102,11 +102,11 @@ impl Client {
     }
 
     /// Open the WebSocket that streams a job's log as its compute provider sends it, one
-    /// [`JobLogStreamMessage`](response::JobLogStreamMessage) per line.
+    /// [`JobLogStreamMessage`](response::JobLogStreamMessage) per batch of lines.
     ///
     /// It carries only the lines sent after it opens, and stays open after the job has
-    /// ended. The log file [`get_job_logs`](Self::get_job_logs) reads is uploaded once the
-    /// job has ended, so this is the only way to read the log of a running job.
+    /// ended. Its lines are numbered as [`get_job_logs`](Self::get_job_logs) reads them, so
+    /// a reader that sees a line skipped reads after the newest one it has.
     ///
     /// The client must be logged in before calling this method.
     pub fn open_job_log_websocket(

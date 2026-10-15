@@ -101,6 +101,6 @@ pub enum JobLogStream {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(tag = "type", content = "data", rename_all = "snake_case")]
 pub enum JobLogStreamMessage {
-    /// A line the job's compute provider sent, with its newline.
-    Log(String),
+    /// Lines the job's compute provider sent, in order.
+    Lines(Vec<JobLogLine>),
 }
