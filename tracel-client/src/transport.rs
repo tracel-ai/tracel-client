@@ -281,6 +281,19 @@ impl ApiTransport {
         self.join_versioned(path, 1)
     }
 
+    /// [`join`](Self::join) with the `ws` scheme, or `wss` for a server reached over `https`.
+    pub fn join_websocket(&self, path: &str) -> Url {
+        let mut url = self.join(path);
+        let scheme = if self.base_url.scheme() == "https" {
+            "wss"
+        } else {
+            "ws"
+        };
+        url.set_scheme(scheme)
+            .expect("Should be able to set ws scheme");
+        url
+    }
+
     fn join_versioned(&self, path: &str, version: u8) -> Url {
         self.base_url
             .join(&format!("v{version}/"))

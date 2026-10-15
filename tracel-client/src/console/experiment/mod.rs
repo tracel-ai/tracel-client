@@ -137,17 +137,11 @@ impl Client {
 
     /// Formats a WebSocket URL for the given experiment.
     fn format_websocket_url(&self, owner_name: &str, project_name: &str, exp_num: i32) -> String {
-        let path: &str = &format!("projects/{owner_name}/{project_name}/experiments/{exp_num}/ws");
-        let mut url = self.transport.join(path);
-
-        url.set_scheme(if self.transport.base_url().scheme() == "https" {
-            "wss"
-        } else {
-            "ws"
-        })
-        .expect("Should be able to set ws scheme");
-
-        url.to_string()
+        self.transport
+            .join_websocket(&format!(
+                "projects/{owner_name}/{project_name}/experiments/{exp_num}/ws"
+            ))
+            .to_string()
     }
 
     /// Create a new experiment for the given project.
