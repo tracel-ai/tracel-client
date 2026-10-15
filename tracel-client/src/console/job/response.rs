@@ -73,17 +73,28 @@ pub struct MoneyResponse {
     pub currency: String,
 }
 
-/// One page of a job's log file.
+/// A page of a job's log, in line order.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct JobLogResponse {
-    pub logs: String,
-    /// Byte offset of the first byte in `logs`.
-    pub start: u64,
-    /// Byte offset after the last byte in `logs`; pass it as the next `start`.
-    pub end: u64,
-    /// Size of the log file in bytes.
-    pub total_size: u64,
+    pub lines: Vec<JobLogLine>,
+    /// More lines lie past the page in the direction it was read.
     pub has_more: bool,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct JobLogLine {
+    /// The line's number in the job's log, counted from 0.
+    pub seq: u64,
+    pub stream: JobLogStream,
+    pub emitted_at: String,
+    pub message: String,
+}
+
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum JobLogStream {
+    Stdout,
+    Stderr,
 }
 
 /// A message of a job's live log WebSocket.
