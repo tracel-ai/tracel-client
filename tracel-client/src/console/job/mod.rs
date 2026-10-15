@@ -3,7 +3,7 @@ pub mod response;
 mod body;
 
 use crate::{
-    ClientError,
+    ClientError, WebSocketClient,
     console::{
         Client,
         job::{
@@ -11,6 +11,7 @@ use crate::{
             response::{JobLogResponse, JobResponse, ProjectJobsResponse, QueuedJobResponse},
         },
     },
+    websocket::WebSocketError,
 };
 
 impl Client {
@@ -85,6 +86,28 @@ impl Client {
         }
 
         self.transport.get_json(url)
+    }
+
+    /// Open the WebSocket that streams a job's log as its compute provider sends it, one
+    /// [`JobLogStreamMessage`](response::JobLogStreamMessage) per line.
+    ///
+    /// It carries only the lines sent after it opens, and stays open after the job has
+    /// ended. The log file [`get_job_logs`](Self::get_job_logs) reads is uploaded once the
+    /// job has ended, so this is the only way to read the log of a running job.
+    ///
+    /// The client must be logged in before calling this method.
+    pub fn open_job_log_websocket(
+        &self,
+        namespace: &str,
+        project_name: &str,
+        job_num: i32,
+    ) -> Result<WebSocketClient, WebSocketError> {
+        let url = self.transport.join_websocket(&format!(
+            "projects/{namespace}/{project_name}/jobs/{job_num}/logs/ws"
+        ));
+        let mut websocket = WebSocketClient::new();
+        websocket.connect(url.as_str(), self.transport.auth())?;
+        Ok(websocket)
     }
 
     /// Cancel a new, queued or running job.

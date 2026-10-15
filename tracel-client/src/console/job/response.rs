@@ -85,3 +85,11 @@ pub struct JobLogResponse {
     pub total_size: u64,
     pub has_more: bool,
 }
+
+/// A message of a job's live log WebSocket.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[serde(tag = "type", content = "data", rename_all = "snake_case")]
+pub enum JobLogStreamMessage {
+    /// A line the job's compute provider sent, with its newline.
+    Log(String),
+}
