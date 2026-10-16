@@ -1,3 +1,4 @@
+pub mod request;
 pub mod response;
 
 mod body;
@@ -8,6 +9,7 @@ use crate::{
         Client,
         job::{
             body::ComputeProviderQueueJobRequest,
+            request::JobLogCursor,
             response::{JobLogResponse, JobResponse, ProjectJobsResponse, QueuedJobResponse},
         },
     },
@@ -67,7 +69,7 @@ impl Client {
         ))
     }
 
-    /// Read a page of a job's log file from byte offset `start`, or from the beginning.
+    /// Read a job's log lines at `cursor`, at most `limit` of them when given.
     ///
     /// The client must be logged in before calling this method.
     pub fn get_job_logs(
@@ -75,25 +77,36 @@ impl Client {
         namespace: &str,
         project_name: &str,
         job_num: i32,
-        start: Option<u64>,
+        cursor: JobLogCursor,
+        limit: Option<u32>,
     ) -> Result<JobLogResponse, ClientError> {
         let mut url = self.transport.join(&format!(
             "projects/{namespace}/{project_name}/jobs/{job_num}/logs"
         ));
-        if let Some(start) = start {
+        match cursor {
+            JobLogCursor::Last => {}
+            JobLogCursor::After(seq) => {
+                url.query_pairs_mut().append_pair("after", &seq.to_string());
+            }
+            JobLogCursor::Before(seq) => {
+                url.query_pairs_mut()
+                    .append_pair("before", &seq.to_string());
+            }
+        }
+        if let Some(limit) = limit {
             url.query_pairs_mut()
-                .append_pair("start", &start.to_string());
+                .append_pair("limit", &limit.to_string());
         }
 
         self.transport.get_json(url)
     }
 
     /// Open the WebSocket that streams a job's log as its compute provider sends it, one
-    /// [`JobLogStreamMessage`](response::JobLogStreamMessage) per line.
+    /// [`JobLogStreamMessage`](response::JobLogStreamMessage) per batch of lines.
     ///
     /// It carries only the lines sent after it opens, and stays open after the job has
-    /// ended. The log file [`get_job_logs`](Self::get_job_logs) reads is uploaded once the
-    /// job has ended, so this is the only way to read the log of a running job.
+    /// ended. Its lines are numbered as [`get_job_logs`](Self::get_job_logs) reads them, so
+    /// a reader that sees a line skipped reads after the newest one it has.
     ///
     /// The client must be logged in before calling this method.
     pub fn open_job_log_websocket(
