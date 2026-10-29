@@ -19,7 +19,7 @@ pub struct ProjectJobResponse {
     pub job_num: i32,
     pub job_project_version: String,
     pub job_command: String,
-    /// `new`, `queued`, `running`, `pending_cancellation`, `completed`, `failed` or `cancelled`.
+    /// `new`, `running`, `pending_cancellation`, `completed`, `failed` or `cancelled`.
     pub status: String,
     pub execution_context: Option<ExecutionContextResponse>,
     pub created_at: String,
@@ -34,7 +34,7 @@ pub struct JobResponse {
     pub job_project: JobProjectResponse,
     pub job_project_version: String,
     pub job_command: String,
-    /// `new`, `queued`, `running`, `pending_cancellation`, `completed`, `failed` or `cancelled`.
+    /// `new`, `running`, `pending_cancellation`, `completed`, `failed` or `cancelled`.
     pub status: String,
     pub status_message: String,
     pub execution_context: Option<ExecutionContextResponse>,
@@ -52,25 +52,7 @@ pub struct JobProjectResponse {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(tag = "type")]
 pub enum ExecutionContextResponse {
-    Managed {
-        compute_provider_name: String,
-        memory_gb: i32,
-        cpu_cores: i32,
-        num_gpus: Option<i32>,
-        lock_price_per_hour: MoneyResponse,
-        final_cost: Option<MoneyResponse>,
-        estimated_cost: Option<MoneyResponse>,
-    },
-    SelfManaged {
-        compute_provider_name: String,
-    },
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct MoneyResponse {
-    /// A decimal amount.
-    pub amount: String,
-    pub currency: String,
+    SelfManaged { compute_provider_name: String },
 }
 
 /// A page of a job's log, in line order.

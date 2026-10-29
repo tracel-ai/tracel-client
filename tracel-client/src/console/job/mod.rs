@@ -123,7 +123,7 @@ impl Client {
         Ok(websocket)
     }
 
-    /// Cancel a new, queued or running job.
+    /// Cancel a new or running job.
     ///
     /// The client must be logged in before calling this method.
     pub fn cancel_job(
