@@ -7,6 +7,9 @@ pub struct UserResponseSchema {
     pub username: String,
     pub email: Option<String>,
     pub namespace: String,
+    /// The profile image selected in the console, when one is available.
+    #[serde(default)]
+    pub profile_picture_url: Option<String>,
     /// The credential the user was read with.
     pub credential: CredentialSchema,
 }
@@ -41,4 +44,31 @@ pub struct GetUserOrganizationsResponse {
 pub struct OrganizationResponse {
     pub name: String,
     pub namespace: String,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_user_response_keeps_the_console_avatar_and_accepts_its_absence() {
+        let mut response = serde_json::json!({
+            "id": 7,
+            "username": "ada",
+            "email": "ada@example.com",
+            "namespace": "ada",
+            "credential": { "kind": "app_session", "expires_at": null }
+        });
+        let user: UserResponseSchema = serde_json::from_value(response.clone()).unwrap();
+        assert!(user.profile_picture_url.is_none());
+        response["profile_picture_url"] = serde_json::json!("https://example.com/ada.png");
+        let user: UserResponseSchema = serde_json::from_value(response.clone()).unwrap();
+        assert_eq!(
+            user.profile_picture_url.as_deref(),
+            Some("https://example.com/ada.png")
+        );
+        response["profile_picture_url"] = serde_json::Value::Null;
+        let user: UserResponseSchema = serde_json::from_value(response).unwrap();
+        assert!(user.profile_picture_url.is_none());
+    }
 }
