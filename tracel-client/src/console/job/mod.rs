@@ -1,28 +1,140 @@
 pub mod request;
+pub mod response;
+
+mod body;
 
 use crate::{
-    ClientError,
-    console::{Client, job::request::ComputeProviderQueueJobRequest},
+    ClientError, WebSocketClient,
+    console::{
+        Client,
+        job::{
+            body::ComputeProviderQueueJobRequest,
+            request::JobLogCursor,
+            response::{JobLogResponse, JobResponse, ProjectJobsResponse, QueuedJobResponse},
+        },
+    },
+    websocket::WebSocketError,
 };
 
 impl Client {
-    pub fn start_remote_job(
+    /// Queue a job that runs the code version `digest` on a compute provider group.
+    ///
+    /// `command` holds the program's arguments, which the compute provider splits into
+    /// words with shell quoting rules.
+    ///
+    /// The client must be logged in before calling this method.
+    pub fn queue_job(
         &self,
-        compute_provider_group_name: &str,
-        owner_name: &str,
+        namespace: &str,
         project_name: &str,
+        compute_provider_group_name: &str,
         digest: &str,
         command: &str,
-    ) -> Result<(), ClientError> {
-        let path: &str = &format!("projects/{owner_name}/{project_name}/jobs/queue");
-        let url = self.transport.join(path);
-
+    ) -> Result<QueuedJobResponse, ClientError> {
         let body = ComputeProviderQueueJobRequest {
             compute_provider_group_name: compute_provider_group_name.to_string(),
             digest: digest.to_string(),
             command: command.to_string(),
         };
 
-        self.transport.post(url, Some(body))
+        self.transport.post_json(
+            format!("projects/{namespace}/{project_name}/jobs/queue"),
+            Some(body),
+        )
+    }
+
+    /// List the jobs of a project.
+    ///
+    /// The client must be logged in before calling this method.
+    pub fn list_jobs(
+        &self,
+        namespace: &str,
+        project_name: &str,
+    ) -> Result<ProjectJobsResponse, ClientError> {
+        self.transport
+            .get_json(format!("projects/{namespace}/{project_name}/jobs"))
+    }
+
+    /// Get a job by its project-scoped number.
+    ///
+    /// The client must be logged in before calling this method.
+    pub fn get_job(
+        &self,
+        namespace: &str,
+        project_name: &str,
+        job_num: i32,
+    ) -> Result<JobResponse, ClientError> {
+        self.transport.get_json(format!(
+            "projects/{namespace}/{project_name}/jobs/{job_num}"
+        ))
+    }
+
+    /// Read a job's log lines at `cursor`, at most `limit` of them when given.
+    ///
+    /// The client must be logged in before calling this method.
+    pub fn get_job_logs(
+        &self,
+        namespace: &str,
+        project_name: &str,
+        job_num: i32,
+        cursor: JobLogCursor,
+        limit: Option<u32>,
+    ) -> Result<JobLogResponse, ClientError> {
+        let mut url = self.transport.join(&format!(
+            "projects/{namespace}/{project_name}/jobs/{job_num}/logs"
+        ));
+        match cursor {
+            JobLogCursor::Last => {}
+            JobLogCursor::After(seq) => {
+                url.query_pairs_mut().append_pair("after", &seq.to_string());
+            }
+            JobLogCursor::Before(seq) => {
+                url.query_pairs_mut()
+                    .append_pair("before", &seq.to_string());
+            }
+        }
+        if let Some(limit) = limit {
+            url.query_pairs_mut()
+                .append_pair("limit", &limit.to_string());
+        }
+
+        self.transport.get_json(url)
+    }
+
+    /// Open the WebSocket that streams a job's log as its compute provider sends it, one
+    /// [`JobLogStreamMessage`](response::JobLogStreamMessage) per batch of lines.
+    ///
+    /// It carries only the lines sent after it opens, and stays open after the job has
+    /// ended. Its lines are numbered as [`get_job_logs`](Self::get_job_logs) reads them, so
+    /// a reader that sees a line skipped reads after the newest one it has.
+    ///
+    /// The client must be logged in before calling this method.
+    pub fn open_job_log_websocket(
+        &self,
+        namespace: &str,
+        project_name: &str,
+        job_num: i32,
+    ) -> Result<WebSocketClient, WebSocketError> {
+        let url = self.transport.join_websocket(&format!(
+            "projects/{namespace}/{project_name}/jobs/{job_num}/logs/ws"
+        ));
+        let mut websocket = WebSocketClient::new();
+        websocket.connect(url.as_str(), self.transport.auth())?;
+        Ok(websocket)
+    }
+
+    /// Cancel a new or running job.
+    ///
+    /// The client must be logged in before calling this method.
+    pub fn cancel_job(
+        &self,
+        namespace: &str,
+        project_name: &str,
+        job_num: i32,
+    ) -> Result<(), ClientError> {
+        self.transport.put(
+            format!("projects/{namespace}/{project_name}/jobs/{job_num}/cancel"),
+            None::<()>,
+        )
     }
 }

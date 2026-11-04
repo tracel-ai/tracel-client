@@ -9,21 +9,6 @@ use crate::error::{ApiErrorBody, ApiErrorCode, ClientError};
 
 const API_CALL_TIMEOUT: Duration = Duration::from_secs(120);
 
-const UPLOAD_SECONDS_ALLOWED_PER_MEGABYTE: u64 = 10;
-
-const MIN_UPLOAD_TIMEOUT: Duration = Duration::from_secs(120);
-
-const CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
-
-fn timeout_worth_allowing_an_upload_of(size_bytes: u64) -> Duration {
-    const BYTES_PER_MEGABYTE: u64 = 1024 * 1024;
-    let megabytes = size_bytes.div_ceil(BYTES_PER_MEGABYTE);
-    let allowed =
-        Duration::from_secs(megabytes.saturating_mul(UPLOAD_SECONDS_ALLOWED_PER_MEGABYTE));
-
-    allowed.max(MIN_UPLOAD_TIMEOUT)
-}
-
 #[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub enum Auth {
@@ -102,7 +87,6 @@ fn bearer_header(token: &str) -> Result<HeaderValue, ClientError> {
 #[derive(Debug, Clone)]
 pub struct ApiTransport {
     http_client: reqwest::blocking::Client,
-    upload_client: reqwest::blocking::Client,
     base_url: Url,
     auth: Auth,
 }
@@ -114,15 +98,8 @@ impl ApiTransport {
             .timeout(API_CALL_TIMEOUT)
             .build()
             .expect("failed to build HTTP client");
-        let upload_client = reqwest::blocking::Client::builder()
-            .timeout(None)
-            .connect_timeout(CONNECT_TIMEOUT)
-            .tcp_keepalive(MIN_UPLOAD_TIMEOUT)
-            .build()
-            .expect("failed to build HTTP upload client");
         Self {
             http_client,
-            upload_client,
             base_url: with_trailing_slash(base_url),
             auth: Auth::None,
         }
@@ -225,6 +202,24 @@ impl ApiTransport {
         Ok(serde_json::from_slice::<R>(&bytes)?)
     }
 
+    /// Send a JSON body via PUT and deserialize the JSON response.
+    pub fn put_json<T, R>(&self, path: impl AsRef<str>, body: Option<T>) -> Result<R, ClientError>
+    where
+        T: serde::Serialize,
+        R: for<'de> serde::Deserialize<'de>,
+    {
+        let response = self.req(reqwest::Method::PUT, path, body)?;
+        let bytes = response.bytes()?;
+        Ok(serde_json::from_slice::<R>(&bytes)?)
+    }
+
+    pub fn put<T>(&self, path: impl AsRef<str>, body: Option<T>) -> Result<(), ClientError>
+    where
+        T: serde::Serialize,
+    {
+        self.req(reqwest::Method::PUT, path, body).map(|_| ())
+    }
+
     pub fn delete(&self, path: impl AsRef<str>) -> Result<(), ClientError> {
         self.req(reqwest::Method::DELETE, path, None::<serde_json::Value>)
             .map(|_| ())
@@ -282,30 +277,21 @@ impl ApiTransport {
         Ok(response)
     }
 
-    /// Upload raw bytes to an absolute (presigned) URL via PUT.
-    ///
-    /// Unlike the other helpers this does NOT join the path with `base_url` and
-    /// does NOT attach auth — presigned URLs (e.g. S3) are absolute and
-    /// self-authenticating.
-    ///
-    /// The request is given [a timeout drawn from its own
-    /// size](timeout_worth_allowing_an_upload_of) rather than the one API calls
-    /// get, which no upload larger than a few megabytes would survive.
-    pub fn upload_bytes_to_url(&self, url: &str, bytes: Vec<u8>) -> Result<(), ClientError> {
-        let timeout = timeout_worth_allowing_an_upload_of(bytes.len() as u64);
-
-        self.upload_client
-            .put(url)
-            .timeout(timeout)
-            .body(bytes)
-            .send()?
-            .map_to_tracel_err()?;
-
-        Ok(())
-    }
-
     pub fn join(&self, path: &str) -> Url {
         self.join_versioned(path, 1)
+    }
+
+    /// [`join`](Self::join) with the `ws` scheme, or `wss` for a server reached over `https`.
+    pub fn join_websocket(&self, path: &str) -> Url {
+        let mut url = self.join(path);
+        let scheme = if self.base_url.scheme() == "https" {
+            "wss"
+        } else {
+            "ws"
+        };
+        url.set_scheme(scheme)
+            .expect("Should be able to set ws scheme");
+        url
     }
 
     fn join_versioned(&self, path: &str, version: u8) -> Url {

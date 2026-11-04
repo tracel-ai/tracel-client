@@ -1,6 +1,6 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct DatasetResponse {
     pub id: String,
     pub name: String,
@@ -8,13 +8,13 @@ pub struct DatasetResponse {
     pub metadata: Option<serde_json::Value>,
 }
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct DatasetListResponse {
     pub items: Vec<DatasetResponse>,
     pub total_count: u64,
 }
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct DatasetVersionResponse {
     pub id: String,
     pub dataset_id: String,
@@ -25,51 +25,51 @@ pub struct DatasetVersionResponse {
     pub item_count: u64,
 }
 
-#[derive(Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum SourceKindResponse {
     AnnotationSet,
     DirectUpload,
 }
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct DatasetVersionListResponse {
     pub items: Vec<DatasetVersionResponse>,
     pub total_count: u64,
 }
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct StartedDatasetVersionUploadResponse {
     pub upload_id: String,
 }
 
-#[derive(Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum DatasetVersionUploadItemStatusResponse {
     Inserted,
     Duplicate,
 }
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct DatasetVersionUploadItemOutcomeResponse {
     pub source_item_id: String,
     pub status: DatasetVersionUploadItemStatusResponse,
 }
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct AddDatasetVersionUploadItemsResponse {
     pub outcomes: Vec<DatasetVersionUploadItemOutcomeResponse>,
 }
 
 #[serde_with::serde_as]
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct DatasetVersionItemResponse {
     pub entry_idx: u64,
     #[serde_as(as = "serde_with::base64::Base64")]
     pub payload: Vec<u8>,
 }
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct DatasetVersionItemsPageResponse {
     pub items: Vec<DatasetVersionItemResponse>,
 }

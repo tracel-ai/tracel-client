@@ -1,13 +1,15 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct CreatedByUserResponse {
     pub id: i32,
     pub username: String,
     pub namespace: String,
+    #[serde(default)]
+    pub profile_picture_url: Option<String>,
 }
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ModelVersionResponse {
     pub id: String,
     pub experiment: Option<ExperimentSourceResponse>,
@@ -30,7 +32,7 @@ pub struct ModelVersionResponse {
 }
 
 /// Only a ready version is listed by default, downloadable, `latest` or an alias target.
-#[derive(Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum ModelVersionStateResponse {
     Pending,
@@ -39,36 +41,38 @@ pub enum ModelVersionStateResponse {
     Deleted,
 }
 
-#[derive(Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum ModelVersionSourceKindResponse {
     Upload,
     Promotion,
 }
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ModelVersionManifestResponse {
     pub files: Vec<ModelFileResponse>,
 }
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ModelFileResponse {
     pub rel_path: String,
     pub size_bytes: u64,
     pub checksum: String,
 }
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ExperimentSourceResponse {
     pub id: i32,
     pub experiment_num: i32,
 }
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ModelResponse {
     pub id: String,
     pub project_id: i32,
     pub name: String,
+    #[serde(default)]
+    pub display_name: String,
     pub description: Option<String>,
     pub created_by: CreatedByUserResponse,
     pub created_at: String,
@@ -77,26 +81,28 @@ pub struct ModelResponse {
     /// versions yet.
     #[serde(default)]
     pub latest_version: Option<u32>,
+    #[serde(default)]
+    pub aliases: Vec<ModelAliasResponse>,
 }
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ModelListResponse {
     pub items: Vec<ModelResponse>,
     pub total: usize,
 }
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ModelVersionListResponse {
     pub items: Vec<ModelVersionResponse>,
     pub total: usize,
 }
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ModelDownloadResponse {
     pub files: Vec<PresignedModelFileUrlResponse>,
 }
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct PresignedModelFileUrlResponse {
     pub rel_path: String,
     pub url: String,
@@ -106,14 +112,26 @@ pub struct PresignedModelFileUrlResponse {
     pub checksum: String,
 }
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct PresignedModelFileUploadUrlsResponse {
     pub rel_path: String,
     pub urls: crate::console::artifact::response::MultipartUploadResponse,
 }
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct RequestModelVersionUploadResponse {
     pub version: u32,
     pub files: Vec<PresignedModelFileUploadUrlsResponse>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct ModelAliasResponse {
+    pub alias: String,
+    pub version: u32,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct ModelAliasListResponse {
+    pub items: Vec<ModelAliasResponse>,
+    pub total: usize,
 }

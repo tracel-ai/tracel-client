@@ -7,7 +7,7 @@ on:
 
 jobs:
   tracel-client:
-    uses: tracel-ai/github-actions/.github/workflows/publish-crate.yml@v11
+    uses: tracel-ai/github-actions/.github/workflows/publish-crate.yml@v12
     with:
       crate: tracel-client
       tag-validation: false
