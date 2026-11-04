@@ -248,6 +248,23 @@ impl Client {
         )
     }
 
+    /// Sign every part URL of a pending version's upload again, for an upload that outlives the
+    /// URLs [`request_model_version_upload`](Self::request_model_version_upload) returned: a
+    /// presigned URL dies with the credentials that signed it, before its own expiry.
+    ///
+    /// The client must be logged in before calling this method.
+    pub fn presign_model_version_upload_again(
+        &self,
+        namespace: &str,
+        project_name: &str,
+        model_name: &str,
+        version: u32,
+    ) -> Result<RequestModelVersionUploadResponse, ClientError> {
+        self.transport.get_json(format!(
+            "projects/{namespace}/{project_name}/models/{model_name}/versions/{version}/upload"
+        ))
+    }
+
     pub fn complete_model_version_upload(
         &self,
         namespace: &str,
